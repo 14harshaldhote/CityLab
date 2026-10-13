@@ -30,8 +30,12 @@ class PostgresStore:
             self.run_id = int(cur.fetchone()[0])
         self._buffer: list[Event] = []
         self._days: list[dict[str, Any]] = []
+        self.seen = 0
 
     def __call__(self, event: Event) -> None:
+        if 0 <= event.id < self.seen:
+            return  # a rewound city replaying events already stored
+        self.seen = max(self.seen, event.id + 1)
         self._buffer.append(event)
         if event.kind == "day_summary" and "day" in event.data:
             self._days.append(event.data)
@@ -56,6 +60,15 @@ class PostgresStore:
                     [(self.run_id, d["day"], json.dumps(d)) for d in days],
                 )
         return len(events)
+
+    def truncate(self, n: int, day: int) -> None:
+        """The city's past changed: forget events from id ``n`` on and daily rows after ``day``."""
+        self._buffer = [e for e in self._buffer if e.id < n]
+        self._days = [d for d in self._days if d["day"] <= day]
+        with self._conn.cursor() as cur:
+            cur.execute("DELETE FROM events WHERE run_id=%s AND id>=%s", (self.run_id, n))
+            cur.execute("DELETE FROM daily_stats WHERE run_id=%s AND day>%s", (self.run_id, day))
+        self.seen = n
 
     def count(self, kind: str | None = None) -> int:
         with self._conn.cursor() as cur:

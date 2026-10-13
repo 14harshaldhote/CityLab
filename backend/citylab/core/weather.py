@@ -66,6 +66,12 @@ class Weather:
         self._last_t = -1
         self._last: WeatherNow | None = None
 
+    def __getstate__(self) -> dict:
+        return {"seed": self.seed, "lat": self.lat, "lon": self.lon, "utc_offset_min": self.utc_offset_min}
+
+    def __setstate__(self, state: dict) -> None:
+        self.__init__(**state)
+
     def at(self, t: int) -> WeatherNow:
         if t == self._last_t:
             return self._last

@@ -227,7 +227,7 @@ class Crime:
             return
         if t % TICK == 0:
             self.on_duty = sum(1 for q in w.job_holders.get(station, []) if w.people[q].activity == 4 and w.people[q].place == station)
-            want = max(2, min(8, self.on_duty // 2))
+            want = int(round(max(2, min(8, self.on_duty // 2)) * w.policy.patrols))
             while len(self.patrols) < want:
                 self._patrol_id += 1
                 self.patrols.append(Patrol(self._patrol_id, node=w.city.buildings[station].node))

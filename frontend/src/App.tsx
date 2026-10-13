@@ -9,6 +9,7 @@ import EconomyPanel from "./components/EconomyPanel";
 import type { Network } from "./components/EgoGraph";
 import LineChart from "./components/LineChart";
 import PersonPanel from "./components/PersonPanel";
+import HistoryPanel from "./components/HistoryPanel";
 import RoadsPanel from "./components/RoadsPanel";
 import SafetyPanel from "./components/SafetyPanel";
 import TimeBar from "./components/TimeBar";
@@ -16,7 +17,7 @@ import { advise } from "./engine/advisor";
 import { LEGEND_KINDS, ROOF } from "./engine/art";
 import { ACTIVITY_COLORS, hex } from "./engine/view";
 
-type Tab = "city" | "person" | "place" | "roads" | "safety" | "agencies" | "economy" | "records" | "charts";
+type Tab = "city" | "person" | "place" | "roads" | "safety" | "agencies" | "economy" | "history" | "records" | "charts";
 
 function usePoll(fn: () => void, ms: number, deps: unknown[]) {
   useEffect(() => {
@@ -145,6 +146,7 @@ export default function App() {
   }, [daily]);
 
   const control = (body: Parameters<typeof api.control>[0]) => api.control(body).catch((e) => setError(String(e)));
+  const travel = (t: number) => api.travel(t).catch((e) => setError(String(e)));
 
   return (
     <div className="app">
@@ -222,11 +224,12 @@ export default function App() {
             onPlay={(playing) => control({ playing })}
             onSpeed={(speed) => control({ speed, playing: true })}
             onSkip={(m) => control({ advance_minutes: m })}
+            onTravel={travel}
           />
         </section>
         <aside>
           <nav className="tabs">
-            {(["city", "person", "place", "roads", "safety", "agencies", "economy", "records", "charts"] as Tab[]).map((t) => (
+            {(["city", "person", "place", "roads", "safety", "agencies", "economy", "history", "records", "charts"] as Tab[]).map((t) => (
               <button key={t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>
                 {t[0].toUpperCase() + t.slice(1)}
               </button>
@@ -299,6 +302,7 @@ export default function App() {
           {tab === "person" && (person ? <PersonPanel card={person} net={net && net.center === person.id ? net : null} onPick={pickPerson} /> : <div className="card muted">Click a person on the map.</div>)}
           {tab === "place" && (building ? <BuildingPanel card={building} onPick={pickPerson} /> : <div className="card muted">Click a building on the map.</div>)}
           {tab === "roads" && (roads ? <RoadsPanel data={roads} /> : <div className="card muted">Counting the traffic...</div>)}
+          {tab === "history" && <HistoryPanel onTravel={travel} />}
           {tab === "safety" &&
             (safety ? <SafetyPanel data={safety} onPick={pickPerson} onPickBuilding={pickBuilding} /> : <div className="card muted">Opening the case files...</div>)}
           {tab === "agencies" &&
@@ -335,6 +339,8 @@ export default function App() {
                 <option value="laid_off">Lay-offs</option>
                 <option value="default">Defaults</option>
                 <option value="left">Departures</option>
+                <option value="report">Monthly and yearly reports</option>
+                <option value="policy">Rule changes</option>
                 <option value="day_summary">Daily reports</option>
               </select>
               <ul className="events">

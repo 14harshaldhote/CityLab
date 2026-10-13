@@ -90,6 +90,13 @@ class Router:
     def invalidate(self) -> None:
         self._path.cache_clear()
 
+    # snapshots keep the city, not the route cache: it refills itself on the first trips
+    def __getstate__(self) -> dict:
+        return {"city": self.city}
+
+    def __setstate__(self, state: dict) -> None:
+        self.__init__(state["city"])
+
     def _compute(self, a: int, b: int) -> tuple[tuple[int, ...], float]:
         g = self.city.graph
         if a == b:

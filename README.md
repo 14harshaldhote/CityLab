@@ -48,7 +48,20 @@ completely free and runs on your own computer.
     flashing lights cruise the streets, spot the CCTV cameras on busy corners,
     and open the *Safety* tab to follow each case from the first report to the
     verdict at the District Court. Click a suspect to see what drove them to it.
-11. **Switch to the flat map.** Press *Map* for a colourful, hand-drawn view where
+11. **Travel back in time.** Drag the slider under the city to any moment in its
+    past and watch it exactly as it was: the same people in the same places.
+    Press Play and history repeats itself, minute for minute.
+12. **Play "what if?".** Open the *History* tab, pick a rule (bus fares, income
+    tax, help for people out of work, police patrols or the bank's interest
+    rate), change it and press *Run both cities*. Two copies of Kamalnagar live
+    through the same week side by side, one as it is and one with your change,
+    and you get to compare them. Make the buses free and watch the autos empty
+    out, and see whether the fuller buses make anyone late for work. If you
+    like the result, make it the city's new rule.
+13. **Read the city's reports.** On the first of every month, and every New
+    Year, the city writes a short report on how it did: who was born, who moved
+    in, what it earned and how many thefts there were.
+14. **Switch to the flat map.** Press *Map* for a colourful, hand-drawn view where
     every dot is a person, coloured by what they're doing.
 
 ![Kamalnagar at night](docs/images/city-night.png)
@@ -99,6 +112,16 @@ These are the same ideas that power modern games and AI, in plain words.
   written down in plain English. Soon you'll be able to ask the city questions,
   like "who are the busiest people in Phool Baug?", and an AI running on your own
   computer will answer from that diary.
+* **The city can replay itself exactly.** Every midnight it saves a snapshot of
+  itself. To go back to any moment, it loads the snapshot just before and plays
+  the minutes in between, and because it follows its rules exactly, the replay
+  always comes out the same. Video games use the same trick for replays and
+  save files.
+* **Small changes ripple.** Change one rule in a what-if, and a few people do
+  something different. They meet different people, spend money in different
+  shops, and soon most of the city's day has shifted a little. Scientists call
+  this the butterfly effect, and it's why weather forecasters and economists
+  run many "what ifs" before trusting any one of them.
 * **Same seed, same story.** Every city grows from a number called a seed, like a
   level code in a game. Use the same seed and you get the same city and the same
   lives, every time. Change it and a whole new Kamalnagar appears.
@@ -130,6 +153,8 @@ These are the same ideas that power modern games and AI, in plain words.
 ![The Friday morning rush: red streets are jammed](docs/images/city-rush-hour.png)
 
 ![The Safety tab: today's thefts, the court list and every open case](docs/images/city-safety.png)
+
+![What if the buses were free? Two cities, side by side](docs/images/city-what-if.png)
 
 ![Someone's life story](docs/images/person-card.png)
 
@@ -167,7 +192,6 @@ set `CITYLAB_POPULATION`.
 
 ## Coming soon
 
-* A time machine to rewind the city and try "what if...?".
 * Chatting with the city: ask it anything about its people and history.
 * AI-run city leaders who make decisions you can watch.
 

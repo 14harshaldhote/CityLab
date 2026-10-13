@@ -152,7 +152,7 @@ main {
 }
 
 .map {
-  height: calc(100vh - 160px);
+  height: calc(100vh - 206px); /* leaves room for the time bar and the time machine slider */
   min-height: 440px;
   border-radius: 16px 18px 15px 17px;
   overflow: hidden;
@@ -864,4 +864,143 @@ aside {
   font-weight: 700;
   line-height: 17px;
   vertical-align: 1px;
+}
+
+/* ---- time machine ---- */
+.timebar-wrap {
+  display: grid;
+  gap: 6px;
+}
+
+.history-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--panel);
+  border: 1.5px solid var(--line);
+  border-radius: 12px 15px 13px 14px;
+  padding: 5px 12px;
+  font-size: 13px;
+}
+
+.history-bar.past {
+  background: #f3e3c4;
+  border-color: var(--gold);
+}
+
+.history-icon {
+  font-size: 18px;
+  color: var(--accent);
+}
+
+.history-bar input[type="range"] {
+  flex: 1;
+  accent-color: var(--accent);
+  min-width: 120px;
+}
+
+.history-label {
+  min-width: 230px;
+  color: var(--muted);
+}
+
+.history-bar.past .history-label {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 6px 0;
+}
+
+.chips button.on {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+}
+
+.progress {
+  height: 10px;
+  border-radius: 6px;
+  background: rgba(59, 47, 39, 0.12);
+  overflow: hidden;
+  margin: 8px 0;
+}
+
+.progress i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.4s;
+}
+
+.compare {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin: 6px 0;
+}
+
+.compare th {
+  text-align: right;
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 2px 4px;
+}
+
+.compare th:first-child,
+.compare td:first-child {
+  text-align: left;
+}
+
+.compare td {
+  text-align: right;
+  padding: 3px 4px;
+  border-top: 1px solid var(--line);
+}
+
+.compare .good {
+  color: var(--sage);
+  font-weight: 700;
+}
+
+.compare .bad {
+  color: var(--warn);
+  font-weight: 700;
+}
+
+.ripple {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0;
+}
+
+.ripple b {
+  font-size: 28px;
+  font-family: "Fraunces", Georgia, serif;
+  color: var(--accent);
+}
+
+.report {
+  border-left: 3px solid var(--gold);
+  padding-left: 10px;
+  margin: 10px 0;
+}
+
+.report h3 {
+  margin: 0 0 2px;
+}
+
+.report .figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
 }

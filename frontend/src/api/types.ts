@@ -96,6 +96,7 @@ export interface Frame {
   city_version?: number;
   sites?: [number, number][];
   counts: Record<string, number>;
+  horizon?: number; // the latest moment this timeline has reached; earlier than that you can travel
   playing: boolean;
   speed: number;
 }
@@ -309,4 +310,82 @@ export interface Safety {
   in_jail: { id: number; name: string; until: string }[];
   cameras: Camera[];
   history: DailyRow[];
+}
+
+export interface LeverInfo {
+  name: string;
+  unit: string;
+  options: number[];
+  story: string;
+}
+
+export interface Measure {
+  key: string;
+  label: string;
+  how: "sum" | "end";
+  same: number;
+  changed: number;
+  diff: number;
+  better: boolean | null;
+}
+
+export interface WhatIfJob {
+  id: number;
+  lever: string;
+  lever_name: string;
+  unit: string;
+  value: number;
+  was: number;
+  days: number;
+  from: string;
+  status: "running" | "done" | "failed" | "cancelled";
+  progress: number;
+  error: string | null;
+  result: {
+    measures: Measure[];
+    ripple: number;
+    touched: number;
+    elsewhere: number;
+    doing_else: number;
+    people: number;
+    same_rows: DailyRow[];
+    changed_rows: DailyRow[];
+    stories: string[];
+    story: string;
+  } | null;
+}
+
+export interface History {
+  horizon: number;
+  horizon_label: string;
+  snapshots: number;
+  megabytes: number;
+  days: number[];
+  t: number;
+  label: string;
+  rules: Record<string, number>;
+  levers: Record<string, LeverInfo>;
+  whatif_days: number[];
+  whatif: WhatIfJob | null;
+}
+
+export interface CityReport {
+  key: string;
+  period: string;
+  text: string;
+  complete: boolean;
+  days: number;
+  first_day: number;
+  last_day: number;
+  population_start: number;
+  population: number;
+  births: number;
+  deaths: number;
+  arrived: number;
+  left: number;
+  crimes: number;
+  tax: number;
+  city: number;
+  trips_bus: number;
+  opened: number;
 }

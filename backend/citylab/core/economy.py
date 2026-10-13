@@ -51,13 +51,11 @@ OWN_PAYER = {"bank": "bank"}  # City Bank pays its own staff from its own accoun
 EXPORTERS = ("office", "factory", "bus_depot")
 RETAIL = ("shop", "restaurant")
 
-INCOME_TAX = 0.15
 SALES_TAX = 0.05
 BUSINESS_TAX = 0.05  # of a company's revenue
 PROPERTY_TAX = 0.10  # of rent collected
 DIVIDEND_SHARE = 0.25  # of cash above a cushion of 30 days' wages, paid to outside shareholders
 PENSION_PER_DAY = 60.0
-BENEFIT_PER_DAY = 40.0
 BENEFIT_DAYS = 180
 GROCERIES_PER_PERSON = 14.0
 RENT_PER_DAY = {"apartment": 45.0, "house": 70.0}
@@ -244,7 +242,7 @@ class Economy:
                 if p is None or p.job is None or p.job.building != bid:
                     continue
                 gross = p.job.wage
-                tax = round(gross * INCOME_TAX, 2)
+                tax = round(gross * self.w.policy.income_tax, 2)
                 self.transfer(payer, self.person(pid), gross - tax, "wages")
                 self.transfer(payer, "city", tax, "income tax")
 
@@ -298,7 +296,7 @@ class Economy:
             if p.retired:
                 self.transfer("city", self.person(p.id), PENSION_PER_DAY, "pensions")
             elif p.unemployed_since is not None and p.job is None and w.t - p.unemployed_since < BENEFIT_DAYS * MINUTES_PER_DAY:
-                self.transfer("city", self.person(p.id), BENEFIT_PER_DAY, "unemployment benefit")
+                self.transfer("city", self.person(p.id), self.w.policy.benefit, "unemployment benefit")
 
     def _retail_costs(self) -> None:
         for bid in sorted(self.company_sales):

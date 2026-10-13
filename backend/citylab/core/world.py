@@ -30,6 +30,7 @@ from .rng import Streams, stable_hash
 from .routing import Router
 from .transport import Transport
 from .crime import Crime
+from .policy import Policy
 from .social import SocialGraph
 from .weather import Weather
 
@@ -58,6 +59,7 @@ class World:
         self._by_kind = {k: [b for b in self.city.buildings if b.kind == k] for k in ("restaurant", "shop", "park", "school", *PLACE_KINDS)}
         self.festival: tuple[str, str, str] | None = festival_on(0)
         self._near_cache: dict[tuple[int, str], list] = {}
+        self.policy = Policy()
         self.brain = Brain(self)
         self.economy = Economy(self)
         self._founded = False

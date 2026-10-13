@@ -59,3 +59,23 @@ export const SPEEDS: { label: string; value: number }[] = [
   { label: "6 h/s", value: 360 },
   { label: "1 day/s", value: 1440 },
 ];
+
+const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const EPOCH = Date.UTC(2026, 0, 1);
+
+/** A simulation minute in words, the same way the city writes it ("Fri 02 Jan 2026 10:00"). */
+export function simLabel(t: number): string {
+  const d = new Date(EPOCH + t * 60_000);
+  const day = Math.floor(t / 1440);
+  const two = (n: number) => String(n).padStart(2, "0");
+  return `${WEEKDAYS[(day + 3) % 7]} ${two(d.getUTCDate())} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()} ${two(d.getUTCHours())}:${two(d.getUTCMinutes())}`;
+}
+
+/** How far back a moment is, in plain words. */
+export function agoLabel(minutes: number): string {
+  if (minutes < 60) return `${Math.round(minutes)} min ago`;
+  if (minutes < 1440) return `${Math.round(minutes / 60)} h ago`;
+  const days = Math.round(minutes / 1440);
+  return days === 1 ? "a day ago" : `${days} days ago`;
+}

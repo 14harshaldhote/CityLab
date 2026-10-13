@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from .clock import DAYS_PER_YEAR, MINUTES_PER_DAY, MINUTES_PER_YEAR, SimTime
+from . import reports
 from .faith import festival_on
 from .names import RELIGION_LABEL, pick_religion
 from .people import Person, gompertz_annual
@@ -102,6 +103,19 @@ def end_of_day(w: World) -> None:
         data=row,
     )
     w.today = DayCounts()
+    _reports(w)
+
+
+def _reports(w: World) -> None:
+    """On the first of the month the city files a report on the month just gone, and each New Year's Day on the year."""
+    when = SimTime(w.t).datetime
+    if when.day != 1 or not w.daily:
+        return
+    rep = reports.reports(w.daily[-40:], w.government.finished, w.city.name, "month")[0]
+    w.emit("report", f"Monthly report for {rep['period']}. {rep['text']}", data={"period": rep["period"], "by": "month"})
+    if when.month == 1:
+        rep = reports.reports(w.daily[-370:], w.government.finished, w.city.name, "year")[0]
+        w.emit("report", f"Yearly report for {rep['period']}. {rep['text']}", data={"period": rep["period"], "by": "year"})
 
 
 def _birthday(w: World, p: Person, t: int) -> None:

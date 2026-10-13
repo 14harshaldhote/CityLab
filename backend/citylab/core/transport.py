@@ -52,7 +52,6 @@ PCU = {"car": 1.0, "auto": 0.7, "bus": 1.0}  # how much room each vehicle takes
 BUS_PACE = 0.85  # buses are a bit slower than cars
 DWELL = 0.5  # minutes at each stop
 BUS_ROOM = 60
-BUS_FARE = 10.0
 AUTO_BASE, AUTO_PER_KM = 25.0, 13.0  # minimum fare covers the first 1.5 km
 PETROL_PER_KM = 5.0
 DIESEL_PER_KM = 1.5  # per bus-kilometre, a small city fleet
@@ -468,7 +467,8 @@ class Transport:
         bus = self._bus(p, src, dst, t)
         if bus is not None:
             trip, walked, wait, ride = bus
-            trip.fare = 0.0 if age < 12 else BUS_FARE / 2 if age >= 65 else BUS_FARE
+            fare = w.policy.bus_fare
+            trip.fare = 0.0 if age < 12 else fare / 2 if age >= 65 else fare
             if trip.fare == 0 or payer is not None and econ.can_afford(payer, trip.fare):
                 options.append((effort * walked + 1.4 * wait + ride + trip.fare / vot, trip))
         if age >= 16 and payer is not None:
@@ -680,7 +680,7 @@ class Transport:
             "today": {"trips": dict(self.today.trips), "commute_min": round(self.today.commute_minutes / max(1, self.today.commutes), 1),
                       "late": self.today.late, "fares": round(self.today.fares, 2), "bus_km": round(self.today.bus_km, 1)},
             "history": self.history[-14:],
-            "fares": {"bus": BUS_FARE, "auto_min": AUTO_BASE, "auto_per_km": AUTO_PER_KM, "petrol_per_km": PETROL_PER_KM},
+            "fares": {"bus": self.w.policy.bus_fare, "auto_min": AUTO_BASE, "auto_per_km": AUTO_PER_KM, "petrol_per_km": PETROL_PER_KM},
             "widened": [self.street_place(a, b) for a, b in sorted(g.edges()) if g.edges[a, b].get("lanes", 1) > 1],
         }
 

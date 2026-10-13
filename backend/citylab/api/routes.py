@@ -8,8 +8,10 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
+from ..core import policy, reports
 from ..core.clock import SimTime
 from ..core.people import ACTIVITY_NAMES
+from ..services.whatif import DAYS
 from ..services.runner import MAX_SPEED, Runner
 
 router = APIRouter(prefix="/api")
@@ -23,6 +25,19 @@ class Control(BaseModel):
     playing: bool | None = None
     speed: float | None = Field(default=None, ge=0, le=MAX_SPEED)
     advance_minutes: int | None = Field(default=None, ge=1, le=7 * 24 * 60)
+
+
+class Travel(BaseModel):
+    t: int = Field(ge=0)
+
+
+class Lever(BaseModel):
+    lever: str
+    value: float
+
+
+class WhatIf(Lever):
+    days: int = Field(default=7)
 
 
 class Reset(BaseModel):
@@ -122,7 +137,7 @@ def person(pid: int, request: Request) -> dict[str, Any]:
         if pid not in r.world.people:
             raise HTTPException(404, "no such person")
         card = r.world.person_card(pid)
-        card["life"] = [_event(e) for e in r.store.query(person=pid, limit=100)]
+        card["life"] = [_event(e) for e in r.store.query(person=pid, limit=100, upto=r.world.bus.count)]
     return card
 
 
@@ -192,7 +207,7 @@ def events(
 ) -> list[dict[str, Any]]:
     r = runner(request)
     with r.lock:
-        return [_event(e) for e in r.store.query(kind=kind, person=person, before=before, limit=limit)]
+        return [_event(e) for e in r.store.query(kind=kind, person=person, before=before, limit=limit, upto=r.world.bus.count)]
 
 
 @router.get("/stats/daily")
@@ -200,6 +215,66 @@ def daily(request: Request, last: int = Query(3650, ge=1)) -> list[dict[str, Any
     r = runner(request)
     with r.lock:
         return [{k: v for k, v in row.items() if k != "social"} | {"ties": row["social"]["ties"]} for row in r.world.daily[-last:]]
+
+
+@router.get("/history")
+def history(request: Request) -> dict[str, Any]:
+    """The time machine: how far back the city can go, its rules, and the latest what-if."""
+    r = runner(request)
+    with r.lock:
+        out = r.history.view()
+        out.update(t=r.world.t, label=r.world.now.label(), rules=policy.current(r.world))
+    out["levers"] = policy.LEVERS
+    out["whatif_days"] = list(DAYS)
+    job = r.whatifs.latest()
+    out["whatif"] = job.view() if job else None
+    return out
+
+
+@router.post("/travel")
+def travel(body: Travel, request: Request) -> dict[str, Any]:
+    return runner(request).travel(body.t)
+
+
+@router.post("/rules")
+def rules(body: Lever, request: Request) -> dict[str, Any]:
+    if body.lever not in policy.LEVERS:
+        raise HTTPException(422, "no such rule")
+    return runner(request).change(body.lever, body.value)
+
+
+@router.post("/whatif")
+def whatif(body: WhatIf, request: Request) -> dict[str, Any]:
+    r = runner(request)
+    if body.lever not in policy.LEVERS:
+        raise HTTPException(422, "no such rule")
+    if body.days not in DAYS:
+        raise HTTPException(422, f"days must be one of {DAYS}")
+    with r.lock:
+        job = r.whatifs.start(r.world, body.lever, body.value, body.days)
+    return job.view()
+
+
+@router.get("/whatif/{jid}")
+def whatif_job(jid: int, request: Request) -> dict[str, Any]:
+    job = runner(request).whatifs.get(jid)
+    if job is None:
+        raise HTTPException(404, "no such what-if")
+    return job.view()
+
+
+@router.delete("/whatif")
+def whatif_cancel(request: Request) -> dict[str, Any]:
+    runner(request).whatifs.cancel_running()
+    return {"ok": True}
+
+
+@router.get("/reports")
+def city_reports(request: Request, by: str = Query("month", pattern="^(month|year)$")) -> list[dict[str, Any]]:
+    r = runner(request)
+    with r.lock:
+        w = r.world
+        return reports.reports(w.daily, w.government.finished, w.city.name, by)
 
 
 @router.websocket("/ws")

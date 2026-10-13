@@ -1,5 +1,5 @@
 import type { Network } from "../components/EgoGraph";
-import type { Agencies, Safety, Transport, BuildingCard, CityEvent, Economy, CityMap, DailyRow, Frame, PersonCard, Summary } from "./types";
+import type { Agencies, CityReport, History, Safety, WhatIfJob, Transport, BuildingCard, CityEvent, Economy, CityMap, DailyRow, Frame, PersonCard, Summary } from "./types";
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(path);
@@ -25,6 +25,12 @@ export const api = {
   agencies: () => get<Agencies>("/api/agencies"),
   transport: () => get<Transport>("/api/transport"),
   safety: () => get<Safety>("/api/safety"),
+  history: () => get<History>("/api/history"),
+  travel: (t: number) => post<{ t: number; label: string; seconds: number }>("/api/travel", { t }),
+  setRule: (lever: string, value: number) => post<Record<string, number>>("/api/rules", { lever, value }),
+  whatIf: (lever: string, value: number, days: number) => post<WhatIfJob>("/api/whatif", { lever, value, days }),
+  whatIfJob: (id: number) => get<WhatIfJob>(`/api/whatif/${id}`),
+  reports: (by: "month" | "year") => get<CityReport[]>(`/api/reports?by=${by}`),
   daily: () => get<DailyRow[]>("/api/stats/daily"),
   control: (body: { playing?: boolean; speed?: number; advance_minutes?: number }) => post<{ playing: boolean; speed: number; t: number }>("/api/control", body),
   reset: (seed: number, population: number) => post<{ seed: number; population: number }>("/api/reset", { seed, population }),
