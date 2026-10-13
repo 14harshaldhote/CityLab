@@ -318,10 +318,11 @@ class World:
 
     def frame(self) -> dict[str, Any]:
         alive = self.alive()
-        ids, xs, ys, acts, ages, places = [], [], [], [], [], []
+        ids, xs, ys, acts, ages, places, cars = [], [], [], [], [], [], []
         for p in alive:
             x, y = self.position(p)
             ids.append(p.id)
+            cars.append(1 if p.activity == TRAVEL and p.trip is not None and p.trip.mode == "car" else 0)
             places.append(p.place if p.place is not None else -1)
             xs.append(round(x, 1))
             ys.append(round(y, 1))
@@ -340,6 +341,7 @@ class World:
             "activity": acts,
             "age": ages,
             "place": places,
+            "car": cars,
             "counts": {ACTIVITY_NAMES[k]: acts.count(k) for k in range(len(ACTIVITY_NAMES))},
         }
 

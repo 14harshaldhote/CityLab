@@ -50,6 +50,7 @@ export interface Frame {
   activity: number[];
   age: number[];
   place: number[];
+  car?: number[];
   counts: Record<string, number>;
   playing: boolean;
   speed: number;

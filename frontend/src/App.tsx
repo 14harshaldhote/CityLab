@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, liveFrames } from "./api/client";
 import type { BuildingCard, CityEvent, CityMap as City, DailyRow, Economy, Frame, PersonCard, Summary } from "./api/types";
 import BuildingPanel from "./components/BuildingPanel";
+import City3D from "./components/City3D";
 import CityMap from "./components/CityMap";
 import EconomyPanel from "./components/EconomyPanel";
 import type { Network } from "./components/EgoGraph";
@@ -31,6 +32,7 @@ export default function App() {
   const frames = useRef<{ prev: Frame | null; next: Frame | null; at: number }>({ prev: null, next: null, at: 0 });
   const [summary, setSummary] = useState<Summary | null>(null);
   const [tab, setTab] = useState<Tab>("city");
+  const [view, setView] = useState<"3d" | "map">("3d");
   const [personId, setPersonId] = useState<number | null>(null);
   const [buildingId, setBuildingId] = useState<number | null>(null);
   const [person, setPerson] = useState<PersonCard | null>(null);
@@ -149,10 +151,24 @@ export default function App() {
       <main>
         <section className="stage">
           {city ? (
-            <CityMap city={city} frames={frames} selectedPerson={tab === "person" ? personId : null} selectedBuilding={tab === "place" ? buildingId : null} onPickPerson={pickPerson} onPickBuilding={pickBuilding} />
+            view === "3d" ? (
+              <City3D city={city} frames={frames} selectedPerson={tab === "person" ? personId : null} selectedBuilding={tab === "place" ? buildingId : null} onPickPerson={pickPerson} onPickBuilding={pickBuilding} />
+            ) : (
+              <CityMap city={city} frames={frames} selectedPerson={tab === "person" ? personId : null} selectedBuilding={tab === "place" ? buildingId : null} onPickPerson={pickPerson} onPickBuilding={pickBuilding} />
+            )
           ) : (
-            <div className="map loading">Loading the city...</div>
+            <div className="map loading">Building the city...</div>
           )}
+          <div className="view-switch">
+            <button className={view === "3d" ? "on" : ""} onClick={() => setView("3d")}>
+              3D city
+            </button>
+            <button className={view === "map" ? "on" : ""} onClick={() => setView("map")}>
+              Map
+            </button>
+          </div>
+          {view === "3d" && <p className="how-to">Drag to look around · right-drag to move · scroll to zoom · click anyone or anything</p>}
+          {view === "map" && (
           <details className="map-legend" open>
             <summary>Map key</summary>
             <ul>
@@ -166,6 +182,7 @@ export default function App() {
               Dots are people, coloured by what they are doing. Taller blocks are taller buildings; shadows follow the real sun.
             </p>
           </details>
+          )}
           <TimeBar
             frame={frame}
             connected={connected}

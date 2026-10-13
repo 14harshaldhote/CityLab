@@ -1,145 +1,134 @@
-# CityLab
+# CityLab: welcome to Kamalnagar
 
-**A city that runs itself.** CityLab simulates **Kamalnagar**, a small Indian city
-of about 2,000 people. Nobody tells them what to do. They wake up, go to work or
-school, eat, visit friends, pray, shop, fall in love, have children, grow old and
-die. Money moves between people, shops, companies, the city and the bank. Every
-event is written down, so the city keeps its own history.
+Imagine a toy city that lives by itself. Nobody moves the pieces. Its 2,000
+people wake up, catch the morning rush, go to work and school, grab chai with
+friends, pray, shop, fall in love, have babies and grow old. Your job is simple:
+watch, poke around, and see what happens.
 
-It is free, open source, and runs on your own computer. No paid services, no API
-keys.
+CityLab is a playground for understanding the ideas behind today's AI and
+simulation games, by playing with them instead of reading about them. It's
+completely free and runs on your own computer.
 
-![Kamalnagar by day](docs/images/map-day.png)
+![Kamalnagar on a Tuesday morning](docs/images/city-day.png)
 
-## What you see
+## Things to try
 
-* **The map.** Every dot is a person, coloured by what they are doing right now.
-  Buildings stand up off the paper. Taller blocks are taller buildings, and their
-  shadows move with the real sun. At night windows light up where people are
-  awake, and street lamps come on.
-* **Click a person** to follow them: their family, job, money, mood, personality,
-  friends, and their life story so far.
-* **Click a building** to see who lives, works or is inside right now.
-* **The City tab** shows what everyone is doing, how many people belong to each
-  community, today's festival if there is one, and a city advisor that points out
-  what needs attention (homes running out, people out of work, the budget).
-* **Economy, Records and Charts** show the money, every recorded event, and how the
-  city changes over time.
-* **Time controls** let you pause, speed up (from one minute to one day per
-  second) or jump ahead.
+1. **Follow someone for a day.** Click any little person in the street, then press
+   *Follow them*. You'll see their family, their job, their mood, their friends
+   and the story of their life so far.
+2. **Catch the morning rush.** Set the speed to *1 h/s* and watch around 8 o'clock
+   as people walk to school and drive to work. Everyone keeps to the left, as on
+   Indian roads.
+3. **Watch the lights come on.** Jump ahead to the evening. Windows light up where
+   families are awake, offices go dark, and street lamps glow.
+4. **Find Friday prayers and Sunday Mass.** Open the Records tab, or click a
+   masjid on a Friday afternoon or the church on a Sunday morning, and see who's
+   inside.
+5. **Wait for a festival.** Diwali, Eid, Christmas, Vaisakhi and more are on the
+   city's calendar. On the day, the City tab tells you, and the places of worship
+   fill up.
+6. **Check who's rich and who's struggling.** The Economy tab shows the bank, the
+   city's budget and the companies doing best and worst.
+7. **Watch a family grow.** In Records, pick *Births* or *Couples*, then open the
+   people involved and follow their family tree.
+8. **Switch to the flat map.** Press *Map* for a colourful, hand-drawn view where
+   every dot is a person, coloured by what they're doing.
 
-![Night in Kamalnagar](docs/images/map-night.png)
+![Kamalnagar at night](docs/images/city-night.png)
 
-## What happens in the city
+## How the city thinks
 
-**People.** Each person has an age, a personality, a home, a family, a faith, and
-needs (food, sleep, company, fun). Whenever they finish something, they pick what
-to do next by weighing their needs, the time, the weather, what is open and how far
-it is. Workers keep their shifts, children go to school, small children stay home.
+These are the same ideas that power modern games and AI, in plain words.
 
-**Neighbourhoods.** Kamalnagar grows around Kamal Chowk, its centre, with the lotus
-lake Kamal Talav beside it. Around it are Shivaji Nagar, Tekdi Wadi, Talav Paar,
-Girni Gaon (the mill area), Bazaar Peth, Phool Baug, Nadi Kinara and Paschim Peth.
+* **Every person has a tiny brain.** Whenever someone finishes what they're doing,
+  they look at their choices (sleep, eat, work, visit a friend, go to the park,
+  pray) and give each one a score. Hungry people score food higher, outgoing
+  people score friends higher, and nobody wants the park in the rain. The best
+  score wins, with a little randomness so nobody acts like a robot. Characters in
+  games like The Sims think the same way.
+* **Friendships grow like real social networks.** People who keep meeting at work,
+  school, the park or the masjid become friends. Friends introduce friends,
+  popular people attract more friends, and friendships fade if nobody keeps them
+  up. That's how real-life friend networks grow, and how social media
+  networks grow too.
+* **Life follows real patterns.** Birthdays, school, first jobs, weddings, babies
+  and old age follow the curves real populations follow. Nobody scripts the
+  population; it grows or shrinks on its own.
+* **Money can't leak.** Every rupee is always somewhere: in a person's account, a
+  shop's till, the city's budget or the bank. When it moves, it leaves one place
+  and arrives in another, just like a real bank's books.
+* **The city keeps a diary.** Every birth, wedding, new job, festival and loan is
+  written down in plain English. Soon you'll be able to ask the city questions,
+  like "who are the busiest people in Phool Baug?", and an AI running on your own
+  computer will answer from that diary.
+* **Same seed, same story.** Every city grows from a number called a seed, like a
+  level code in a game. Use the same seed and you get the same city and the same
+  lives, every time. Change it and a whole new Kamalnagar appears.
 
-**Faith and festivals.** Families are Hindu, Muslim, Buddhist, Jain, Christian,
-Sikh or Parsi (or follow no religion), in shares close to a Maharashtrian city. A
-family's names come from its community, and children take their parents' faith.
-Each community has its own place of worship and goes at its own times:
+## What's in Kamalnagar
 
-* Hindus visit the mandir in the morning or for the evening aarti.
-* Muslims pray at the masjid, and many join Friday's midday prayer.
-* Christians go to Sunday Mass.
-* Sikhs visit the gurudwara, where the langar serves a free meal to all.
-* Buddhists gather at the Buddha vihar on Sunday mornings.
-* Jains visit the derasar in the morning.
-* Parsis visit the agiary.
+* **Neighbourhoods:** Kamal Chowk in the middle, next to the lotus lake Kamal
+  Talav, surrounded by Shivaji Nagar, Tekdi Wadi, Talav Paar, Girni Gaon, Bazaar
+  Peth, Phool Baug, Nadi Kinara and Paschim Peth, with farmland all around.
+* **People and families** from every community: Hindu, Muslim, Buddhist, Jain,
+  Christian, Sikh and Parsi, with names from their community.
+* **Places to go:** bungalows and housing societies with water tanks on the roof,
+  glass office towers, shops, restaurants, factories, schools, a hospital, the
+  police station, the municipal corporation and City Bank.
+* **Places of worship:** mandirs, masjids, a church, a gurudwara with its free
+  langar, a Buddha vihar, a Jain derasar and a Parsi agiary.
+* **Money:** wages, rent, groceries, taxes, pensions, savings, loans, and
+  companies that grow or lay people off.
 
-Some people go every day, many go weekly, some only on festival days. Diwali, Eid,
-Christmas, Vaisakhi, Buddha Purnima, Mahavir Jayanti, Navroz, Ganesh Chaturthi and
-others are announced on their day, and places of worship fill up. Meeting at the
-same place builds friendships. Faith never changes anyone's pay or job chances.
+![Someone's life story](docs/images/person-card.png)
 
-![Sunday Mass at St. Mary's Church](docs/images/sunday-mass.png)
+## Start it on your computer
 
-**Friendships.** People who meet at work, school, the park, a restaurant or a place
-of worship become acquaintances. Friends of friends get introduced, ties fade if
-they are not kept up, and well-connected people attract more friends, the way real
-social networks grow.
-
-**Life.** Every midnight people have birthdays, start school, finish school, find
-jobs and retire. Couples form between close friends who get along, and move in
-together. Babies are born. People die, more likely as they age. Grown children move
-out. When there are more jobs than workers, newcomers arrive, often following a
-friend. Families who stay out of work for months may leave.
-
-**Money.** Everyone has a bank account at City Bank. People earn wages and pay for
-rent, groceries, meals and shopping, with taxes going to the city. Companies sell
-what they make, pay staff, and lay people off if they run out of money. Places of
-worship live on offerings. The city pays teachers, doctors, police, pensions and
-benefits. The bank pays interest, gives loans to people it trusts and writes off
-bad debts. Money is never created or lost by accident: the books are checked every
-midnight.
-
-![A citizen's card](docs/images/person-card.png)
-
-![The Economy tab](docs/images/economy.png)
-
-## Run it
-
-With Docker (city, web page and database):
+The easiest way is with [Docker](https://www.docker.com/products/docker-desktop/)
+(free). Download this project, open a terminal in its folder and type:
 
 ```bash
 docker compose up --build
-# open http://localhost:8080
 ```
 
-Without Docker:
+Then open <http://localhost:8080> in your browser. That's it.
+
+<details>
+<summary>Without Docker, for tinkerers</summary>
+
+You'll need Python and Node.js. In one terminal:
 
 ```bash
 cd backend && pip install -e ".[dev]" && uvicorn citylab.main:app --port 8000
-cd frontend && npm install && npm run dev   # open http://localhost:5173
 ```
 
-You can change these with environment variables:
-
-| Variable | What it does | Default |
-|---|---|---|
-| `CITYLAB_SEED` | Which city you get. The same seed always builds the same city and the same lives. | 1 |
-| `CITYLAB_POPULATION` | How many people the city starts with | 2000 |
-| `CITYLAB_SPEED` | Simulated minutes per real second | 10 |
-| `CITYLAB_AUTOPLAY` | Start running as soon as the server starts | on |
-| `CITYLAB_DATABASE_URL` | Save events to PostgreSQL (optional) | none |
-
-A city of 2,000 runs at about one simulated day per 1.5 seconds on a laptop
-(`python -m benchmarks.bench` in `backend/`).
-
-## Coming next
-
-City departments and new buildings as the city grows, traffic and buses, crime
-with police, CCTV and courts, rewinding history, asking the city questions in plain
-English with a free local AI model, and AI-run city leaders.
-
-## How it is built
-
-* **Simulation:** Python. Each person decides only when their current activity
-  ends, so thousands of people cost very little. Routes come from
-  [NetworkX](https://networkx.org/), daylight from the sun's real position (the
-  same code as [LotusLab](https://github.com/14harshaldhote/LotusLab), which
-  CityLab grew out of).
-* **Server:** [FastAPI](https://fastapi.tiangolo.com/), with a live WebSocket that
-  sends everyone's position five times a second.
-* **Page:** React and TypeScript. The map is drawn with
-  [PixiJS](https://pixijs.com/) (WebGL); charts and the friendship graph with
-  [D3](https://d3js.org/).
-* **Storage:** in memory, or [PostgreSQL](https://www.postgresql.org/) with
-  pgvector, ready for the "ask the city" feature.
-
-## Tests
+In another:
 
 ```bash
-cd backend && pytest -q
-cd frontend && npm test
+cd frontend && npm install && npm run dev
 ```
 
-Database tests run when `CITYLAB_TEST_DATABASE_URL` is set. `docker compose up db`
-starts one at `postgresql://citylab:citylab@localhost:5432/citylab`.
+Then open <http://localhost:5173>. To get a different city, set
+`CITYLAB_SEED` to any number before starting. To start with more or fewer people,
+set `CITYLAB_POPULATION`.
+
+</details>
+
+## Coming soon
+
+* Traffic jams, buses and bus stops.
+* Crime, police patrols, CCTV cameras and courts.
+* A time machine to rewind the city and try "what if...?".
+* Chatting with the city: ask it anything about its people and history.
+* AI-run city leaders who make decisions you can watch.
+
+## Made with free tools
+
+The 3D city is drawn with [three.js](https://threejs.org/), the flat map with
+[PixiJS](https://pixijs.com/) and the charts with [D3](https://d3js.org/). The
+city itself runs on Python. Everything is free and open source, and nothing ever
+needs a paid account or an internet service.
+
+CityLab grew out of [LotusLab](https://github.com/14harshaldhote/LotusLab), a
+lotus pond simulator. That's why the lake at the heart of Kamalnagar is full of
+lotuses.
