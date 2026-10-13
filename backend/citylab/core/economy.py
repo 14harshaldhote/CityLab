@@ -24,7 +24,10 @@ Once a day (``end_of_day``):
 5. **The bank** pays interest on savings, collects loan instalments, turns
    overdrafts into loans for people and companies it trusts, and records missed
    payments for those it does not.
-6. **Companies** that run out of money borrow or lay people off.
+6. **Places of worship** are trusts: they live on visitors' offerings, pay their
+   priests and caretakers, and spend what is left on festivals, upkeep and charity.
+   The gurudwara's free kitchen (langar) feeds everyone who comes.
+7. **Companies** that run out of money borrow or lay people off.
 """
 
 from __future__ import annotations
@@ -43,6 +46,7 @@ if TYPE_CHECKING:
     from .world import World
 
 PUBLIC = ("school", "hospital", "police", "city_hall", "park")
+TRUSTS = ("temple", "mosque", "church", "gurudwara", "vihara", "derasar", "agiary")  # run on offerings, pay no tax or dividends
 OWN_PAYER = {"bank": "bank"}  # City Bank pays its own staff from its own account
 EXPORTERS = ("office", "factory", "bus_depot")
 RETAIL = ("shop", "restaurant")
@@ -60,7 +64,8 @@ RENT_PER_DAY = {"apartment": 45.0, "house": 70.0}
 MEAL_OUT = 22.0
 WHOLESALE_SHARE = 0.4  # what a shop pays the outside world for the goods it sells
 UPKEEP_SHARE = 0.35  # what the landlord spends on upkeep
-OUTPUT_PER_WAGE = 1.4  # how much an average worker's day sells for, relative to their wage
+OUTPUT_PER_WAGE = 1.4
+LANGAR_MEAL = 8.0  # what the gurudwara's free kitchen spends per meal  # how much an average worker's day sells for, relative to their wage
 
 
 @dataclass(slots=True)
@@ -168,8 +173,9 @@ class Economy:
             dst = "city"
         if left > 0:
             if heirs:
-                for q in heirs:
-                    self.transfer(acct, self.person(q), left / len(heirs), "inheritance")
+                for k, q in enumerate(heirs):  # the last heir takes what rounding left over
+                    share = self.balance[acct] if k == len(heirs) - 1 else left / len(heirs)
+                    self.transfer(acct, self.person(q), share, "inheritance")
             else:
                 self.transfer(acct, dst, left, "inheritance" if dst == "city" else "money leaving the city")
         elif left < 0:
@@ -187,6 +193,16 @@ class Economy:
         self.transfer(acct, self.company(bid), amount - tax, purpose)
         self.transfer(acct, "city", tax, "sales tax")
         self.company_sales[bid] += amount - tax
+
+    def offering(self, p: Person, bid: int) -> None:
+        """A voluntary offering (dakshina, sadaqah, collection) from adults who can spare it."""
+        if p.age(self.w.t) < 18 or not self.can_afford(p, 60.0):
+            return
+        amount = float(self.rng.uniform(5, 25)) * (0.5 + p.devotion)
+        self.transfer(self.person(p.id), self.company(bid), amount, "offerings")
+
+    def langar(self, bid: int) -> None:
+        self.transfer(self.company(bid), "outside", LANGAR_MEAL, "langar kitchen")
 
     def meal_price(self) -> float:
         return MEAL_OUT
@@ -305,7 +321,8 @@ class Economy:
             acct = self.company(bid)
             cushion = 30 * sum(w.people[q].job.wage for q in holders if w.people[q].job) + 5000.0
             if self.balance[acct] > cushion:
-                self.transfer(acct, "outside", (self.balance[acct] - cushion) * DIVIDEND_SHARE, "dividends")
+                purpose = "festivals, upkeep and charity" if b.kind in TRUSTS else "dividends"
+                self.transfer(acct, "outside", (self.balance[acct] - cushion) * DIVIDEND_SHARE, purpose)
 
     # ---- the bank ------------------------------------------------------------------------------
 

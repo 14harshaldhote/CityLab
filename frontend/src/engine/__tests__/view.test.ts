@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { lerpFrames, nearestPoint, nightShade, rectAt } from "../view";
+import { lerpFrames, nearestPoint, rectAt } from "../view";
 
 describe("view helpers", () => {
   it("finds the nearest point within a radius", () => {
@@ -16,12 +16,6 @@ describe("view helpers", () => {
     ];
     expect(rectAt(rects, 25, 5)?.id).toBe(2);
     expect(rectAt(rects, 15, 5)).toBeUndefined();
-  });
-
-  it("darkens at night and not at noon", () => {
-    expect(nightShade(60, 0)).toBe(0);
-    expect(nightShade(-30, 0)).toBeCloseTo(0.62);
-    expect(nightShade(-3, 0)).toBeGreaterThan(0);
   });
 
   it("interpolates matching ids and snaps new ones", () => {

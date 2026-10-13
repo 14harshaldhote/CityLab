@@ -8,6 +8,8 @@ import type { Network } from "./components/EgoGraph";
 import LineChart from "./components/LineChart";
 import PersonPanel from "./components/PersonPanel";
 import TimeBar from "./components/TimeBar";
+import { advise } from "./engine/advisor";
+import { LEGEND_KINDS, ROOF } from "./engine/art";
 import { ACTIVITY_COLORS, hex } from "./engine/view";
 
 type Tab = "city" | "person" | "place" | "economy" | "records" | "charts";
@@ -60,8 +62,9 @@ export default function App() {
   usePoll(() => personId !== null && api.network(personId).then(setNet, () => setNet(null)), 15000, [personId]);
   usePoll(() => buildingId !== null && api.building(buildingId).then(setBuilding, () => undefined), 1500, [buildingId]);
   usePoll(() => tab === "records" && api.events(eventKind || undefined).then(setEvents, () => undefined), 2500, [tab, eventKind]);
-  usePoll(() => tab === "economy" && api.economy().then(setEcon, () => undefined), 2500, [tab]);
-  usePoll(() => tab === "charts" && api.daily().then(setDaily, () => undefined), 4000, [tab]);
+  usePoll(() => (tab === "economy" || tab === "city") && api.economy().then(setEcon, () => undefined), 3000, [tab]);
+  usePoll(() => (tab === "charts" || tab === "city") && api.daily().then(setDaily, () => undefined), 5000, [tab]);
+  const tips = useMemo(() => advise(summary, econ, daily), [summary, econ, daily]);
 
   useEffect(() => {
     if (!query.trim()) return setResults([]);
@@ -83,24 +86,24 @@ export default function App() {
     return {
       days,
       people: [
-        { label: "population", color: "#2f7fb0", values: daily.map((d) => d.population) },
-        { label: "employed", color: "#3a9a55", values: daily.map((d) => d.employed) },
+        { label: "population", color: "#2c7fb8", values: daily.map((d) => d.population) },
+        { label: "employed", color: "#5f8a4a", values: daily.map((d) => d.employed) },
       ],
       life: [
-        { label: "births", color: "#3a9a55", values: daily.map((d) => d.births) },
-        { label: "deaths", color: "#6c7a96", values: daily.map((d) => d.deaths) },
-        { label: "arrived", color: "#e2723b", values: daily.map((d) => d.arrived) },
-        { label: "left", color: "#c9b13a", values: daily.map((d) => d.left) },
+        { label: "births", color: "#5f8a4a", values: daily.map((d) => d.births) },
+        { label: "deaths", color: "#5b6c9e", values: daily.map((d) => d.deaths) },
+        { label: "arrived", color: "#e3672f", values: daily.map((d) => d.arrived) },
+        { label: "left", color: "#c9971a", values: daily.map((d) => d.left) },
       ],
       social: [
-        { label: "new acquaintances per day", color: "#d4508a", values: daily.map((d) => d.new_friendships) },
+        { label: "new acquaintances per day", color: "#d9467f", values: daily.map((d) => d.new_friendships) },
       ],
-      ties: [{ label: "social ties", color: "#8a5cc4", values: daily.map((d) => d.ties) }],
+      ties: [{ label: "social ties", color: "#8a4fc6", values: daily.map((d) => d.ties) }],
       money: [
-        { label: "median bank balance", color: "#3a9a55", values: daily.map((d) => d.median_balance) },
+        { label: "median bank balance", color: "#5f8a4a", values: daily.map((d) => d.median_balance) },
       ],
       budget: [
-        { label: "city budget", color: "#2f7fb0", values: daily.map((d) => d.city) },
+        { label: "city budget", color: "#2c7fb8", values: daily.map((d) => d.city) },
         { label: "loans outstanding", color: "#d9480f", values: daily.map((d) => d.loans_outstanding) },
       ],
     };
@@ -111,23 +114,28 @@ export default function App() {
   return (
     <div className="app">
       <header>
-        <h1>CityLab</h1>
-        <span className="muted">a city that runs itself</span>
+        <div className="brand">
+          <h1>
+            City<span>Lab</span>
+          </h1>
+          {city?.name && <span className="cityname">{city.name}</span>}
+          <span className="muted">a city that runs itself</span>
+        </div>
         {summary && (
           <div className="stats">
-            <span>
+            <span className="stat">
               <b>{summary.population.toLocaleString()}</b> people
             </span>
-            <span>
+            <span className="stat">
               <b>{summary.households}</b> households
             </span>
-            <span>
-              <b>{summary.employed}</b> employed
+            <span className="stat">
+              <b>{summary.employed}</b> working
             </span>
-            <span>
-              <b>{summary.pupils}</b> pupils
+            <span className="stat">
+              <b>{summary.pupils}</b> at school
             </span>
-            <span>
+            <span className="stat">
               <b>{summary.social.friendships.toLocaleString()}</b> friendships
             </span>
           </div>
@@ -145,6 +153,19 @@ export default function App() {
           ) : (
             <div className="map loading">Loading the city...</div>
           )}
+          <details className="map-legend" open>
+            <summary>Map key</summary>
+            <ul>
+              {LEGEND_KINDS.map(([k, label]) => (
+                <li key={k}>
+                  <i className="swatch" style={{ background: hex(ROOF[k]) }} /> {label}
+                </li>
+              ))}
+            </ul>
+            <p className="muted small" style={{ margin: "6px 0 0" }}>
+              Dots are people, coloured by what they are doing. Taller blocks are taller buildings; shadows follow the real sun.
+            </p>
+          </details>
           <TimeBar
             frame={frame}
             connected={connected}
@@ -161,6 +182,27 @@ export default function App() {
               </button>
             ))}
           </nav>
+          {tab === "city" && summary?.festival && (
+            <div className="card festival">
+              <h2>Today is {summary.festival.name}</h2>
+              <p>
+                In {summary.city}, {summary.festival.text}. {summary.festival.faith} families fill their places of worship all day.
+              </p>
+            </div>
+          )}
+          {tab === "city" && tips.length > 0 && (
+            <div className="card advisor">
+              <h2>City advisor</h2>
+              <ul>
+                {tips.map((t) => (
+                  <li key={t.title} className={t.tone}>
+                    <b>{t.title}</b>
+                    {t.detail}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {tab === "city" && (
             <div className="card">
               <h2>Right now</h2>
@@ -177,6 +219,20 @@ export default function App() {
                   {summary.couples} couples · {summary.retired} retired · {summary.unemployed} looking for work · {summary.vacancies} open jobs · {summary.free_homes} free homes. Each person
                   has {summary.social.avg_ties} ties on average. Last step took {summary.step_ms} ms.
                 </p>
+              )}
+              {summary?.religions && (
+                <>
+                  <h3>Communities</h3>
+                  <ul className="faiths">
+                    {Object.entries(summary.religions).map(([label, n]) => (
+                      <li key={label}>
+                        <span>{label}</span>
+                        <i style={{ width: `${Math.max(1, (100 * n) / summary.population)}%` }} />
+                        <b>{n}</b>
+                      </li>
+                    ))}
+                  </ul>
+                </>
               )}
               <h3>Find a person</h3>
               <input placeholder="Type a name" value={query} onChange={(e) => setQuery(e.target.value)} />
@@ -208,6 +264,7 @@ export default function App() {
                 <option value="graduated">Graduations</option>
                 <option value="retired">Retirements</option>
                 <option value="arrived">Arrivals</option>
+                <option value="festival">Festivals</option>
                 <option value="loan">Loans</option>
                 <option value="laid_off">Lay-offs</option>
                 <option value="default">Defaults</option>

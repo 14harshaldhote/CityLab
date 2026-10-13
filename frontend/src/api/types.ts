@@ -13,11 +13,13 @@ export interface Building {
   w: number;
   h: number;
   district: string;
+  central?: boolean;
   households: number;
   jobs: number;
 }
 
 export interface CityMap {
+  name: string;
   size: number;
   spacing: number;
   nodes: CityNode[];
@@ -32,6 +34,7 @@ export interface WeatherNow {
   rain_mm_h: number;
   cloud_pct: number;
   sun_elevation_deg: number;
+  sun_azimuth_deg: number;
   phase: number;
 }
 
@@ -46,6 +49,7 @@ export interface Frame {
   y: number[];
   activity: number[];
   age: number[];
+  place: number[];
   counts: Record<string, number>;
   playing: boolean;
   speed: number;
@@ -65,6 +69,9 @@ export interface Summary {
   free_homes: number;
   social: { people: number; ties: number; friendships: number; avg_ties: number };
   events: number;
+  city: string;
+  religions: Record<string, number>;
+  festival: { name: string; faith: string; text: string } | null;
   playing: boolean;
   speed: number;
   step_ms: number;
@@ -104,6 +111,8 @@ export interface PersonCard {
   school: string | null;
   retired: boolean;
   unemployed: boolean;
+  religion: string;
+  devotion: number;
   personality: Record<string, number>;
   needs: Record<string, number>;
   mood: number;

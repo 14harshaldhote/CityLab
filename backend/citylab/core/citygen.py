@@ -6,6 +6,10 @@ offices and shops, a civic quarter, an industrial edge, residential neighbourhoo
 parks, and a ring of empty land the city can grow into later. Every building hangs
 off its nearest street corner, which is where routing starts and ends.
 
+The city is Kamalnagar, an Indian city: its neighbourhoods have Marathi names, its
+shops, schools and housing societies are named the way they are in India, and its
+residential streets have places of worship for each community (see ``faith.py``).
+
 Everything is drawn from one seed, so the same seed always builds the same city.
 """
 
@@ -18,8 +22,11 @@ import networkx as nx
 import numpy as np
 
 from .clock import MINUTES_PER_HOUR as H
+from .names import CITY_NAME
 
-DISTRICTS = ("North Hill", "Lakeside", "East Market", "Mill Quarter", "South Gardens", "Riverside", "West End", "Old Town")
+# the eight neighbourhoods around the centre, by compass direction from west, then clockwise
+DISTRICTS = ("Paschim Peth", "Shivaji Nagar", "Tekdi Wadi", "Talav Paar", "Girni Gaon", "Bazaar Peth", "Phool Baug", "Nadi Kinara")
+CENTRE = "Kamal Chowk"
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +72,14 @@ TYPES: dict[str, BuildingType] = {
         BuildingType("bank", "Bank", 20, OFFICE_HOURS, 165.0, 9 * H, 17 * H, True),
         BuildingType("park", "Park", 2, (Shift(7 * H, 15 * H, False),), 80.0, 6 * H, 22 * H),
         BuildingType("bus_depot", "Bus depot", 20, (Shift(5 * H, 13 * H, False), Shift(13 * H, 21 * H, False)), 110.0),
+        # places of worship: priests, caretakers and kitchen volunteers, paid by the trust from offerings
+        BuildingType("temple", "Mandir", 4, (Shift(5 * H, 13 * H, False), Shift(13 * H, 21 * H, False)), 85.0, 5 * H, 21 * H + 30),
+        BuildingType("mosque", "Masjid", 3, (Shift(4 * H + 30, 12 * H + 30, False), Shift(12 * H + 30, 21 * H, False)), 85.0, 4 * H + 30, 22 * H),
+        BuildingType("church", "Church", 3, (Shift(6 * H, 14 * H, False), Shift(12 * H, 20 * H, False)), 85.0, 6 * H, 20 * H),
+        BuildingType("gurudwara", "Gurudwara", 6, (Shift(4 * H, 12 * H, False), Shift(12 * H, 20 * H, False), Shift(20 * H, 4 * H, False)), 85.0),
+        BuildingType("vihara", "Buddha Vihar", 2, (Shift(6 * H, 14 * H, False), Shift(13 * H, 21 * H, False)), 85.0, 6 * H, 21 * H),
+        BuildingType("derasar", "Jain Derasar", 3, (Shift(5 * H + 30, 13 * H + 30, False), Shift(13 * H, 21 * H, False)), 85.0, 5 * H + 30, 21 * H),
+        BuildingType("agiary", "Agiary", 2, (Shift(6 * H, 14 * H, False), Shift(13 * H, 21 * H, False)), 85.0, 6 * H, 21 * H),
     )
 }
 
@@ -106,6 +121,7 @@ class Building:
             "w": round(self.w, 1),
             "h": round(self.h, 1),
             "district": self.district,
+            "central": self.district == CENTRE,
             "households": self.households,
             "jobs": len(self.jobs),
         }
@@ -119,6 +135,7 @@ class City:
     buildings: list[Building]
     developed: np.ndarray  # bool per block (n-1 x n-1)
     n: int  # corners per side
+    name: str = CITY_NAME
 
     def node_xy(self, node: int) -> tuple[float, float]:
         d = self.graph.nodes[node]
@@ -129,12 +146,13 @@ class City:
 
     def to_dict(self) -> dict:
         return {
+            "name": self.name,
             "size": self.size,
             "spacing": self.spacing,
             "nodes": [{"id": int(n), "x": d["x"], "y": d["y"]} for n, d in self.graph.nodes(data=True)],
             "edges": [[int(a), int(b)] for a, b in self.graph.edges()],
             "buildings": [b.to_dict() for b in self.buildings],
-            "districts": list(DISTRICTS) + ["Downtown"],
+            "districts": list(DISTRICTS) + [CENTRE],
         }
 
 
@@ -186,17 +204,24 @@ def generate_city(seed: int, n: int = 16, spacing: float = 260.0, developed_radi
     zones = _zone_blocks(rng, developed, c)
     buildings: list[Building] = []
     counters: dict[str, int] = {}
+    used: set[str] = set()
     for (i, j), zone in zones.items():
         r, ang = block_info(i, j)
-        district = "Downtown" if r < 1.8 else DISTRICTS[int(((ang + math.pi) / (2 * math.pi)) * 8) % 8]
+        district = CENTRE if r < 1.8 else DISTRICTS[int(((ang + math.pi) / (2 * math.pi)) * 8) % 8]
         for kind, (qx, qy, qw, qh), extra in _block_layout(rng, zone, r):
             x = i * spacing + 18 + qx * (spacing - 36)
             y = j * spacing + 18 + qy * (spacing - 36)
             w, h = qw * (spacing - 36) - 8, qh * (spacing - 36) - 8
             node = _nearest_node(g, x + w / 2, y + h / 2)
             counters[kind] = counters.get(kind, 0) + 1
+            name = _name(kind, district, counters[kind], extra, zone)
+            base, k = name, 2
+            head, _, tail = base.partition(", ")
+            while name in used:  # "Ganga Niwas 2, Phool Baug"
+                name, k = f"{head} {k}" + (f", {tail}" if tail else ""), k + 1
+            used.add(name)
             b = Building(
-                id=len(buildings), kind=kind, name=_name(kind, district, counters[kind]),
+                id=len(buildings), kind=kind, name=name,
                 x=x, y=y, w=w, h=h, node=node, district=district,
             )
             t = TYPES[kind]
@@ -235,6 +260,12 @@ def _zone_blocks(rng: np.random.Generator, developed: np.ndarray, c: float) -> d
     res = [k for k, v in zones.items() if v == "residential"]
     for k in [res[i] for i in rng.permutation(len(res))[: max(2, len(res) // 10)]]:
         zones[k] = "school"
+    # places of worship on residential streets: temples spread across the city, a few
+    # masjids, and one place for each smaller community
+    res = [k for k, v in zones.items() if v == "residential"]
+    places = ["temple"] * max(3, len(res) // 9) + ["mosque"] * max(2, len(res) // 30) + ["church", "gurudwara", "vihara", "derasar", "agiary"]
+    for k, kind in zip([res[i] for i in rng.permutation(len(res))], places):
+        zones[k] = "worship:" + kind
     return zones
 
 
@@ -263,6 +294,9 @@ def _block_layout(rng: np.random.Generator, zone: str, r: float) -> Layout:
             u = rng.random()
             out.append(("office" if u < 0.45 else "shop" if u < 0.7 else "restaurant" if u < 0.85 else "home", q, 12))
         return out
+    if zone.startswith("worship:"):
+        per = 8 if r < 3.5 else 3
+        return [(zone[8:], QUADS[0], 0)] + [("home", q, per) for q in QUADS[1:]]
     if zone == "local":
         return [("shop", QUADS[0], 0), ("restaurant", QUADS[1], 0), ("home", QUADS[2], 4), ("home", QUADS[3], 4)]
     # residential: apartments nearer the centre, houses further out
@@ -279,11 +313,51 @@ def _nearest_node(g: nx.Graph, x: float, y: float) -> int:
     return int(best)
 
 
-def _name(kind: str, district: str, k: int) -> str:
-    if kind in ("city_hall", "bank", "bus_depot"):
-        return TYPES[kind].label
+SHOPS = ("Ganesh Kirana", "Laxmi General Store", "Noor Provision Store", "Sai Supermarket", "Mehta Traders", "Patil Stores",
+         "Annapurna Mart", "Royal Bazaar", "Shree Medical", "Bombay Cloth House", "Fresh Fruits Corner", "Bharat Hardware")
+RESTAURANTS = ("Shiv Sagar", "Hotel Swad", "Bawarchi", "Irani Cafe", "Udupi Bhavan", "Punjab Dhaba", "Misal House",
+               "Vaishali", "Chaitanya Paratha", "Cafe Goodluck", "Kolhapuri Rassa", "Bhatkal Biryani")
+FACTORIES = ("Textile Mill", "Auto Parts", "Steel Works", "Foods", "Pharma", "Engineering Works", "Paper Mill", "Electricals")
+FACTORY_BRANDS = ("Sahyadri", "Deccan", "Indrayani", "Godavari", "Krishna", "Bhima", "Mula", "Kamal")
+OFFICES = ("IT Park", "Business Centre", "Corporate Tower", "Trade Centre", "Tech Hub")
+SCHOOLS = ("Saraswati Vidya Mandir", "New English School", "Modern High School", "Sant Dnyaneshwar Vidyalaya",
+           "St. Joseph's School", "Anjuman Urdu High School", "Bal Shikshan Mandir", "Zilla Parishad School")
+PARKS = ("Phule Udyan", "Tilak Baug", "Nana-Nani Park", "Ganesh Udyan", "Azad Maidan", "Hirvai Garden")
+HOMES = ("Sai Krupa", "Shanti", "Gokul", "Anand", "Sukh Sagar", "Ganga", "Om", "Green Valley", "Noor", "Mount Carmel", "Sunshine",
+         "Laxmi", "Vrindavan", "Kalpataru", "Swapnapurti", "Shubham", "Jamuna", "Panchavati", "Neelkanth", "Gulmohar")
+WORSHIP = {
+    "temple": ("Ganpati Mandir", "Hanuman Mandir", "Vitthal Mandir", "Shiv Mandir", "Ram Mandir", "Devi Mandir", "Dattatreya Mandir",
+               "Sai Baba Mandir"),
+    "mosque": ("Jama Masjid", "Noorani Masjid", "Madina Masjid", "Makka Masjid"),
+    "church": ("St. Mary's Church",),
+    "gurudwara": ("Gurudwara Singh Sabha",),
+    "vihara": ("Siddhartha Buddha Vihar",),
+    "derasar": ("Shri Mahavir Jain Derasar",),
+    "agiary": ("Kamalnagar Agiary",),
+}
+
+
+def _name(kind: str, district: str, k: int, households: int = 0, zone: str = "") -> str:
+    pick = lambda names: names[(k - 1) % len(names)]  # noqa: E731
+    if kind == "city_hall":
+        return f"{CITY_NAME} Municipal Corporation"
+    if kind == "bank":
+        return "City Bank"
+    if kind == "bus_depot":
+        return f"{CITY_NAME} Bus Depot"
     if kind == "hospital":
-        return "City Hospital"
+        return f"{CITY_NAME} Civil Hospital"
     if kind == "police":
-        return "Central Police Station"
-    return f"{district} {TYPES[kind].label} {k}"
+        return f"{CENTRE} Police Station"
+    if kind == "park" and zone == "central_park":
+        return "Kamal Talav"  # the lotus lake
+    if kind in WORSHIP:
+        return f"{pick(WORSHIP[kind])}, {district}"
+    if kind == "home":
+        return f"{pick(HOMES)} {'Housing Society' if households > 3 else 'Niwas'}, {district}"
+    if kind == "factory":
+        return f"{FACTORY_BRANDS[(k - 1) % len(FACTORY_BRANDS)]} {FACTORIES[(3 * k + (k - 1) // len(FACTORY_BRANDS)) % len(FACTORIES)]}"
+    if kind == "office":
+        return f"{district} {pick(OFFICES)}"
+    names = {"shop": SHOPS, "restaurant": RESTAURANTS, "school": SCHOOLS, "park": PARKS}[kind]
+    return f"{pick(names)}, {district}"

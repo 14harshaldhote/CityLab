@@ -33,14 +33,33 @@ function Who({ p, onPick }: { p: PersonRef | null; onPick: (id: number) => void 
   );
 }
 
+const PLACE_OF_WORSHIP: Record<string, string> = {
+  Hindu: "the mandir",
+  Muslim: "the masjid",
+  Christian: "church",
+  Sikh: "the gurudwara",
+  Buddhist: "the Buddha vihar",
+  Jain: "the derasar",
+  Parsi: "the agiary",
+};
+
+function faithLine(card: PersonCard): string | null {
+  const place = PLACE_OF_WORSHIP[card.religion];
+  if (!place || card.age < 6) return null;
+  const how = card.devotion > 0.6 ? "often" : card.devotion > 0.35 ? "now and then" : "mostly on festival days";
+  return `Goes to ${place} ${how}.`;
+}
+
 export default function PersonPanel({ card, net, onPick }: { card: PersonCard; net: Network | null; onPick: (id: number) => void }) {
   return (
     <div className="card">
       <h2>{card.name}</h2>
       <p className="muted">
-        {card.sex === "F" ? "Woman" : "Man"}, {Math.floor(card.age)} ({card.stage}) · lives at {card.home.name}, {card.home.district}
+        {card.sex === "F" ? "Woman" : "Man"}, {Math.floor(card.age)} ({card.stage}) · {card.religion} · lives at {card.home.name}
+        {card.home.name.includes(card.home.district) ? "" : `, ${card.home.district}`}
         {!card.alive && " · no longer in the city"}
       </p>
+      {card.alive && faithLine(card) && <p className="muted small">{faithLine(card)}</p>}
       {card.alive && (
         <p className="now">
           Now <b>{card.activity}</b>

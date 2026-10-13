@@ -22,7 +22,8 @@ from .citygen import City, generate_city
 from .clock import MINUTES_PER_DAY, MINUTES_PER_HOUR, MINUTES_PER_YEAR, SimTime
 from .economy import Economy
 from .events import Event, EventBus
-from .names import FEMALE, MALE, SURNAMES
+from .faith import PLACE_KINDS, festival_on
+from .names import RELIGION_LABEL, family_name, first_name, pick_religion
 from .people import ACTIVITY_NAMES, SLEEP, TRAVEL, Household, Job, Person
 from .rng import Streams, stable_hash
 from .routing import Router
@@ -51,7 +52,8 @@ class World:
         self._next_hh = 0
         self.daily: list[dict[str, Any]] = []  # one row of statistics per simulated day
         self.today = lifecycle.DayCounts()
-        self._by_kind = {k: [b for b in self.city.buildings if b.kind == k] for k in ("restaurant", "shop", "park", "school")}
+        self._by_kind = {k: [b for b in self.city.buildings if b.kind == k] for k in ("restaurant", "shop", "park", "school", *PLACE_KINDS)}
+        self.festival: tuple[str, str, str] | None = festival_on(0)
         self._near_cache: dict[tuple[int, str], list] = {}
         self.brain = Brain(self)
         self.economy = Economy(self)
@@ -92,13 +94,21 @@ class World:
     # ---- people -----------------------------------------------------------------------
 
     def new_person(
-        self, *, sex: str, born: int, household: int, last: str | None = None, parents: tuple[int, ...] = (), first: str | None = None
+        self, *, sex: str, born: int, household: int, last: str | None = None, parents: tuple[int, ...] = (), first: str | None = None,
+        religion: str | None = None,
     ) -> Person:
         rng = self.streams("people")
         pid = self._next_pid
         self._next_pid += 1
+        if religion is None:
+            # children take their parents' faith; in a mixed marriage, one of the two
+            faiths = sorted({self.people[q].religion for q in parents})
+            religion = faiths[int(rng.integers(len(faiths)))] if faiths else pick_religion(rng)
         if first is None:
-            first = str(rng.choice(FEMALE if sex == "F" else MALE))
+            first = first_name(rng, religion, sex)
+        devotion = 0.0 if religion == "none" else float(rng.beta(2.0, 2.2))
+        if parents and religion != "none":
+            devotion = 0.5 * devotion + 0.5 * float(np.mean([self.people[q].devotion for q in parents]))
         traits = np.clip(rng.normal(0.5, 0.18, 5), 0.02, 0.98)
         # children take after their parents a little
         if parents:
@@ -106,7 +116,8 @@ class World:
                              self.people[q].agreeableness, self.people[q].neuroticism] for q in parents], axis=0)
             traits = np.clip(0.5 * traits + 0.5 * mean + rng.normal(0, 0.05, 5), 0.02, 0.98)
         p = Person(
-            id=pid, first=first, last=last or str(rng.choice(SURNAMES)), sex=sex, born=born, household=household,
+            id=pid, first=first, last=last or family_name(rng, religion), sex=sex, born=born, household=household,
+            religion=religion, devotion=devotion,
             openness=float(traits[0]), conscientiousness=float(traits[1]), extraversion=float(traits[2]),
             agreeableness=float(traits[3]), neuroticism=float(traits[4]), parents=parents, arrived=self.t,
         )
@@ -227,21 +238,22 @@ class World:
             if made >= target:
                 break
             hh = self.new_household(home, has_car=bool(rng.random() < 0.45))
-            last = str(rng.choice(SURNAMES))
+            faith = pick_religion(rng)
+            last = family_name(rng, faith)
             kind = rng.choice(["single", "couple", "family", "single_parent", "seniors"], p=[0.2, 0.22, 0.38, 0.07, 0.13])
             adults: list[Person] = []
             if kind == "seniors":
                 a = 65 + rng.integers(0, 22)
-                adults.append(self.new_person(sex="F", born=born(a), household=hh.id, last=last))
+                adults.append(self.new_person(sex="F", born=born(a), household=hh.id, last=last, religion=faith))
                 if rng.random() < 0.7:
-                    adults.append(self.new_person(sex="M", born=born(a + rng.integers(-3, 5)), household=hh.id, last=last))
+                    adults.append(self.new_person(sex="M", born=born(a + rng.integers(-3, 5)), household=hh.id, last=last, religion=faith))
             else:
                 a = 21 + rng.integers(0, 40) if kind != "family" else 27 + rng.integers(0, 22)
                 first_sex = "F" if kind in ("family", "single_parent") or rng.random() < 0.5 else "M"
-                adults.append(self.new_person(sex=first_sex, born=born(a), household=hh.id, last=last))
+                adults.append(self.new_person(sex=first_sex, born=born(a), household=hh.id, last=last, religion=faith))
                 if kind in ("couple", "family"):
                     other = "M" if rng.random() < 0.95 else first_sex
-                    adults.append(self.new_person(sex=other, born=born(max(20, a + rng.integers(-4, 6))), household=hh.id, last=last))
+                    adults.append(self.new_person(sex=other, born=born(max(20, a + rng.integers(-4, 6))), household=hh.id, last=last, religion=faith))
             if len(adults) == 2:
                 lifecycle.make_couple(self, adults[0], adults[1], announce=False)
             if kind in ("family", "single_parent"):
@@ -306,10 +318,11 @@ class World:
 
     def frame(self) -> dict[str, Any]:
         alive = self.alive()
-        ids, xs, ys, acts, ages = [], [], [], [], []
+        ids, xs, ys, acts, ages, places = [], [], [], [], [], []
         for p in alive:
             x, y = self.position(p)
             ids.append(p.id)
+            places.append(p.place if p.place is not None else -1)
             xs.append(round(x, 1))
             ys.append(round(y, 1))
             acts.append(p.activity)
@@ -326,6 +339,7 @@ class World:
             "y": ys,
             "activity": acts,
             "age": ages,
+            "place": places,
             "counts": {ACTIVITY_NAMES[k]: acts.count(k) for k in range(len(ACTIVITY_NAMES))},
         }
 
@@ -364,6 +378,8 @@ class World:
             "school": self.city.buildings[p.school].name if p.school is not None else None,
             "retired": p.retired,
             "unemployed": p.unemployed_since is not None,
+            "religion": RELIGION_LABEL[p.religion],
+            "devotion": round(p.devotion, 2),
             "personality": {"openness": round(p.openness, 2), "conscientiousness": round(p.conscientiousness, 2),
                             "extraversion": round(p.extraversion, 2), "agreeableness": round(p.agreeableness, 2),
                             "neuroticism": round(p.neuroticism, 2)},
@@ -399,5 +415,15 @@ class World:
             "free_homes": sum(self.city.buildings[b].households - len(o) for b, o in self.occupancy.items()),
             "social": self.social.summary(),
             "events": self.bus.count,
+            "city": self.city.name,
+            "religions": self.religions(alive),
+            "festival": {"name": self.festival[1], "faith": RELIGION_LABEL[self.festival[0]], "text": self.festival[2]} if self.festival else None,
             "hours_simulated": t // MINUTES_PER_HOUR,
         }
+
+    def religions(self, alive: list[Person] | None = None) -> dict[str, int]:
+        counts: dict[str, int] = {}
+        for p in alive if alive is not None else self.alive():
+            label = RELIGION_LABEL[p.religion]
+            counts[label] = counts.get(label, 0) + 1
+        return dict(sorted(counts.items(), key=lambda kv: -kv[1]))

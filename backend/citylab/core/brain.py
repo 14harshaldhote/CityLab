@@ -22,8 +22,9 @@ import math
 from typing import TYPE_CHECKING
 
 from .clock import MINUTES_PER_DAY, SimTime
+from .faith import FAITHS, FESTIVAL_SERVICE
 from .people import (
-    EAT_HOME, EAT_OUT, HOME, PARK, SCHOOL, SHOP, SLEEP, SOCIAL, TRAVEL, WORK,
+    EAT_HOME, EAT_OUT, HOME, PARK, SCHOOL, SHOP, SLEEP, SOCIAL, TRAVEL, WORK, WORSHIP,
     Person, Plan, urgency,
 )
 
@@ -32,7 +33,7 @@ if TYPE_CHECKING:
 
 SCHOOL_START = 8 * 60
 SCHOOL_END = 15 * 60
-VISIT_KINDS = (WORK, SCHOOL, PARK, EAT_OUT, SHOP, SOCIAL)
+VISIT_KINDS = (WORK, SCHOOL, PARK, EAT_OUT, SHOP, SOCIAL, WORSHIP)
 
 
 def is_workday(p: Person, day: int, weekdays_only: bool) -> bool:
@@ -157,6 +158,10 @@ class Brain:
                 score *= 0.3
             options.append((score - self._far(here, pk), PARK, pk, t + 60 + int(self.rng.integers(60))))
 
+        worship = self._worship(p, st, here, t)
+        if worship is not None:
+            options.append(worship)
+
         noise = self.rng.gumbel(0.0, 0.12, len(options))
         best = options[max(range(len(options)), key=lambda i: options[i][0] + noise[i])]
         _, activity, place, until = best
@@ -165,6 +170,31 @@ class Brain:
         elif activity == SCHOOL:
             p.last_school_day = day
         self._go(p, activity, place, until, t)
+
+    def _worship(self, p: Person, st: SimTime, here: int, t: int) -> tuple[float, int, int, int] | None:
+        """A visit to their place of worship, if a service is on now and they have not been to it yet."""
+        faith = FAITHS[p.religion]
+        if faith.place is None or p.devotion <= 0:
+            return None
+        services = faith.services
+        festival = self.w.festival is not None and self.w.festival[0] == p.religion
+        if festival:
+            services = (FESTIVAL_SERVICE,) + services
+        mod, wd = st.minute_of_day, st.weekday
+        for svc in services:
+            if svc.weekday is not None and svc.weekday != wd or not svc.start <= mod < svc.end:
+                continue
+            if p.last_worship >= st.day * MINUTES_PER_DAY + svc.start:
+                continue  # already went during this service
+            place = self.w.nearest_open(here, faith.place, t)
+            if place is None:
+                return None
+            # weekly prayers and festivals draw people whenever they come; daily visits wait a day
+            weekly = svc.weekday is not None or svc is FESTIVAL_SERVICE
+            recency = 1.0 if weekly else min(1.0, (t - p.last_worship) / (22 * 60))
+            score = svc.weight * 1.8 * p.devotion**2 * recency - self._far(here, place)
+            return score, WORSHIP, place, t + svc.stay + int(self.rng.integers(15))
+        return None
 
     def _far(self, a: int, b: int) -> float:
         if a == b:
@@ -199,4 +229,10 @@ class Brain:
             econ.purchase(p, place, econ.meal_price(), "meals out")
         elif activity == SHOP:
             econ.purchase(p, place, econ.shopping_price(), "shopping")
+        elif activity == WORSHIP:
+            p.last_worship = t
+            econ.offering(p, place)
+            if self.w.city.buildings[place].kind == "gurudwara":  # langar: a free meal for everyone who comes
+                p.hunger = max(p.hunger, 0.9)
+                econ.langar(place)
         self.w.schedule(p)

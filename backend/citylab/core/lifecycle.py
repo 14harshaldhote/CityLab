@@ -14,6 +14,8 @@ scripted curve:
 * **Migration**: when the city has more open jobs than job-seekers and free homes,
   newcomers arrive, often following a friend already here (preferential attachment
   again). Long-term unemployed households may leave.
+* **Faith** passes from parents to children; most couples share a community.
+  Festival days are announced at midnight.
 """
 
 from __future__ import annotations
@@ -25,6 +27,8 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from .clock import DAYS_PER_YEAR, MINUTES_PER_DAY, MINUTES_PER_YEAR, SimTime
+from .faith import festival_on
+from .names import RELIGION_LABEL, pick_religion
 from .people import Person, gompertz_annual
 
 if TYPE_CHECKING:
@@ -78,6 +82,7 @@ def end_of_day(w: World) -> None:
     _leave_home(w, rng, alive)
     if SimTime(t).day % 7 == 0:
         _migration(w, rng)
+    _festival(w)
 
     row = w.summary()
     row.update(asdict(w.today))
@@ -171,6 +176,8 @@ def _romance(w: World, rng: np.random.Generator, alive: list[Person]) -> None:
                 continue
             if o.sex == p.sex and rng.random() > 0.05:
                 continue
+            if o.religion != p.religion and rng.random() > 0.15:
+                continue  # most couples are from the same community, a few are not
             diff = abs(p.openness - o.openness) + abs(p.conscientiousness - o.conscientiousness) + abs(p.agreeableness - o.agreeableness)
             if rng.random() < strength * (1.0 - diff / 3.0):
                 make_couple(w, p, o)
@@ -256,11 +263,13 @@ def _migration(w: World, rng: np.random.Generator) -> None:
         hh = w.new_household(home, has_car=bool(rng.random() < 0.4))
         last = None
         a = 22 + int(rng.integers(0, 22))
-        first = w.new_person(sex="F" if rng.random() < 0.5 else "M", born=t - a * MINUTES_PER_YEAR - int(rng.integers(MINUTES_PER_YEAR)), household=hh.id, last=last)
+        faith = pick_religion(rng)
+        first = w.new_person(sex="F" if rng.random() < 0.5 else "M", born=t - a * MINUTES_PER_YEAR - int(rng.integers(MINUTES_PER_YEAR)),
+                             household=hh.id, last=last, religion=faith)
         members = [first]
         if rng.random() < 0.45:
             partner = w.new_person(sex="M" if first.sex == "F" else "F", born=first.born - int(rng.integers(-3, 4)) * MINUTES_PER_YEAR,
-                                   household=hh.id, last=first.last)
+                                   household=hh.id, last=first.last, religion=faith if rng.random() < 0.95 else pick_religion(rng))
             make_couple(w, first, partner, announce=False)
             members.append(partner)
             for _ in range(int(rng.integers(0, 3))):
@@ -303,3 +312,13 @@ def _migration(w: World, rng: np.random.Generator) -> None:
                 w.occupancy[hh.home].remove(hh.id)
             w.today.left += len(leaving)
             w.emit("left", f"The {w.people[leaving[0]].last} household ({len(leaving)} people) left the city to find work.", tuple(leaving))
+
+
+def _festival(w: World) -> None:
+    """At midnight: is today a festival? People of that faith will crowd their places of worship all day."""
+    w.festival = festival_on(SimTime(w.t).day % DAYS_PER_YEAR)
+    if w.festival is not None:
+        faith, name, what = w.festival
+        n = sum(1 for p in w.alive() if p.religion == faith)
+        w.emit("festival", f"{name} in {w.city.name}: {what}. {n} {RELIGION_LABEL[faith]} residents celebrate.",
+               data={"festival": name, "faith": faith})

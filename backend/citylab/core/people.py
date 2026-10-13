@@ -20,8 +20,9 @@ from .routing import Trip
 NEEDS = ("hunger", "energy", "social", "fun")
 
 # activity codes, shared with the frontend (index = colour/legend)
-SLEEP, HOME, EAT_HOME, EAT_OUT, WORK, SCHOOL, SOCIAL, PARK, SHOP, TRAVEL = range(10)
-ACTIVITY_NAMES = ("sleeping", "at home", "eating at home", "eating out", "working", "at school", "visiting friends", "at the park", "shopping", "travelling")
+SLEEP, HOME, EAT_HOME, EAT_OUT, WORK, SCHOOL, SOCIAL, PARK, SHOP, TRAVEL, WORSHIP = range(11)
+ACTIVITY_NAMES = ("sleeping", "at home", "eating at home", "eating out", "working", "at school", "visiting friends", "at the park",
+                  "shopping", "travelling", "at a place of worship")
 
 # per-minute base drain, then per-activity additions (hunger, energy, social, fun)
 BASE_RATE = (-1 / 360, -1 / 1400, -1 / 1800, -1 / 800)
@@ -36,6 +37,7 @@ ACTIVITY_RATE: dict[int, tuple[float, float, float, float]] = {
     PARK: (0.0, 0.0, 1 / 400, 1 / 90),
     SHOP: (0.0, 0.0, 1 / 800, 1 / 150),
     TRAVEL: (0.0, 0.0, 0.0, 0.0),
+    WORSHIP: (0.0, 0.0, 1 / 150, 1 / 250),  # community and a little calm
 }
 
 
@@ -82,6 +84,9 @@ class Person:
     alive: bool = True
     died: int | None = None
     arrived: int = 0  # sim minute they joined the city (born or moved in)
+    religion: str = "none"  # key in names.RELIGIONS
+    devotion: float = 0.0  # 0..1, how often they go to their place of worship
+    last_worship: int = -(10**9)
     # needs and current activity
     hunger: float = 0.8
     energy: float = 0.8

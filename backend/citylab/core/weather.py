@@ -34,6 +34,7 @@ class WeatherNow:
     rain_mm_h: float
     cloud_pct: float
     sun_elevation_deg: float
+    sun_azimuth_deg: float  # clockwise from north
     phase: int  # 0 night, 1 twilight, 2 golden, 3 day (same codes as LotusLab)
 
     @property
@@ -50,6 +51,7 @@ class WeatherNow:
             "rain_mm_h": round(self.rain_mm_h, 2),
             "cloud_pct": round(self.cloud_pct),
             "sun_elevation_deg": round(self.sun_elevation_deg, 2),
+            "sun_azimuth_deg": round(self.sun_azimuth_deg, 1),
             "phase": self.phase,
         }
 
@@ -78,11 +80,15 @@ class Weather:
         h2 = min(h + 1, 24)
         temp = day["temp"][h] * (1 - f) + day["temp"][h2] * f
         elev = day["elev"][h] * (1 - f) + day["elev"][h2] * f
+        a0, a1 = day["azim"][h], day["azim"][h2]
+        da = (a1 - a0 + 180.0) % 360.0 - 180.0
+        azim = (a0 + da * f) % 360.0
         return WeatherNow(
             temperature_c=float(temp),
             rain_mm_h=float(day["rain"][h]),
             cloud_pct=float(day["cloud"][h]),
             sun_elevation_deg=float(elev),
+            sun_azimuth_deg=float(azim),
             phase=0 if elev < -6.0 else 1 if elev < 0.0 else 2 if elev < 6.0 else 3,
         )
 
@@ -105,4 +111,4 @@ class Weather:
             rain[start_h : start_h + length] = total / length
             cloud[max(0, start_h - 2) : start_h + length + 1] = np.maximum(cloud[max(0, start_h - 2) : start_h + length + 1], 85.0)
             temp[start_h : start_h + length] -= 2.0
-        return {"temp": temp, "rain": rain, "cloud": cloud, "elev": sun.elevation_deg}
+        return {"temp": temp, "rain": rain, "cloud": cloud, "elev": sun.elevation_deg, "azim": sun.azimuth_deg}

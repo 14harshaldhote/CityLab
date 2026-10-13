@@ -1,32 +1,6 @@
 /** Pure helpers for drawing and picking. No DOM, no Pixi: easy to test. */
 
-export const ACTIVITY_COLORS = [
-  0x6c7a96, // sleeping
-  0x9c8f7a, // at home
-  0xd59a3a, // eating at home
-  0xe2723b, // eating out
-  0x2f7fb0, // working
-  0x8a5cc4, // at school
-  0xd4508a, // visiting friends
-  0x3a9a55, // at the park
-  0xc9b13a, // shopping
-  0x1d2a24, // travelling
-];
-
-export const BUILDING_COLORS: Record<string, number> = {
-  home: 0xe9dcc5,
-  office: 0xb9c8d8,
-  shop: 0xf0c987,
-  restaurant: 0xeeb0a0,
-  factory: 0xc2bdb4,
-  school: 0xd8c4ec,
-  hospital: 0xf4b6b6,
-  police: 0xa9b8e6,
-  city_hall: 0xe8d58f,
-  bank: 0xb7dcc0,
-  park: 0xa9d59a,
-  bus_depot: 0xc8c8c8,
-};
+export { PEOPLE as ACTIVITY_COLORS } from "./art";
 
 export const hex = (c: number) => `#${c.toString(16).padStart(6, "0")}`;
 
@@ -55,12 +29,6 @@ export interface Rect {
 
 export function rectAt<T extends Rect>(rects: T[], x: number, y: number): T | undefined {
   return rects.find((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
-}
-
-/** How dark the streets are: 0 at full daylight, ~0.6 at deep night. */
-export function nightShade(sunElevationDeg: number, cloudPct: number): number {
-  const light = Math.min(1, Math.max(0, (sunElevationDeg + 8) / 16));
-  return Math.min(0.62, (1 - light) * 0.62 + (cloudPct / 100) * 0.08 * light);
 }
 
 /** Interpolate positions between two frames so movement looks smooth between server ticks. */
