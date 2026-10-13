@@ -98,6 +98,12 @@ class Building:
     households: int = 0  # capacity, homes only
     students: int = 0  # capacity, schools only
     jobs: list[Shift] = field(default_factory=list)  # one entry per job slot
+    status: str = "open"  # "construction" while it is being built
+    progress: float = 1.0  # 0..1 while under construction
+    owner: str = ""  # who built it (a developer, a trust, the city)
+    opened_day: int = 0
+    households_planned: int = 0  # homes it will have once finished
+    zone: str = ""
 
     @property
     def type(self) -> BuildingType:
@@ -124,6 +130,11 @@ class Building:
             "central": self.district == CENTRE,
             "households": self.households,
             "jobs": len(self.jobs),
+            "status": self.status,
+            "progress": round(self.progress, 3),
+            "owner": self.owner,
+            "opened_day": self.opened_day,
+            "planned": self.households_planned,
         }
 
 
@@ -136,7 +147,10 @@ class City:
     developed: np.ndarray  # bool per block (n-1 x n-1)
     n: int  # corners per side
     name: str = CITY_NAME
-
+    zones: dict[tuple[int, int], str] = field(default_factory=dict)  # zone of every developed block
+    plots: list[Plot] = field(default_factory=list)  # zoned, empty lots waiting for a project
+    roadworks: list[tuple[int, int]] = field(default_factory=list)  # blocks whose streets are being laid
+    version: int = 0  # goes up whenever streets or buildings change
     def node_xy(self, node: int) -> tuple[float, float]:
         d = self.graph.nodes[node]
         return d["x"], d["y"]
@@ -153,7 +167,62 @@ class City:
             "edges": [[int(a), int(b)] for a, b in self.graph.edges()],
             "buildings": [b.to_dict() for b in self.buildings],
             "districts": list(DISTRICTS) + [CENTRE],
+            "version": self.version,
+            "plots": [p.to_dict() for p in self.plots],
+            "roadworks": [self.block_rect(i, j) for i, j in self.roadworks],
         }
+
+    def block_rect(self, i: int, j: int) -> dict:
+        return {"x": i * self.spacing, "y": j * self.spacing, "w": self.spacing, "h": self.spacing}
+
+    def block_of(self, b: Building) -> tuple[int, int]:
+        return int(b.x // self.spacing), int(b.y // self.spacing)
+
+    def district_at(self, i: int, j: int) -> str:
+        c = (self.n - 2) / 2.0
+        r, ang = math.hypot(i - c, j - c), math.atan2(j - c, i - c)
+        return CENTRE if r < 1.8 else DISTRICTS[int(((ang + math.pi) / (2 * math.pi)) * 8) % 8]
+
+    def lay_streets(self, i: int, j: int) -> int:
+        """Streets around block (i, j), adding any missing corners. Returns how many street segments were new."""
+        g = self.graph
+        corner = lambda a, b: a * self.n + b  # noqa: E731
+        for a, b in ((i, j), (i + 1, j), (i, j + 1), (i + 1, j + 1)):
+            if corner(a, b) not in g:
+                g.add_node(corner(a, b), x=a * self.spacing, y=b * self.spacing)
+        added = 0
+        for (a0, b0), (a1, b1) in (((i, j), (i + 1, j)), ((i, j + 1), (i + 1, j + 1)), ((i, j), (i, j + 1)), ((i + 1, j), (i + 1, j + 1))):
+            if not g.has_edge(corner(a0, b0), corner(a1, b1)):
+                g.add_edge(corner(a0, b0), corner(a1, b1), length=self.spacing)
+                added += 1
+        return added
+
+    def lots(self, i: int, j: int) -> list[tuple[float, float, float, float]]:
+        """The four quarter lots of a block, as x, y, w, h."""
+        sp = self.spacing
+        out = []
+        for qx, qy, qw, qh in QUADS:
+            x = i * sp + 18 + qx * (sp - 36)
+            y = j * sp + 18 + qy * (sp - 36)
+            out.append((x, y, qw * (sp - 36) - 8, qh * (sp - 36) - 8))
+        return out
+
+
+@dataclass
+class Plot:
+    """An empty lot that Town Planning has zoned, waiting for a builder."""
+
+    block: tuple[int, int]
+    x: float
+    y: float
+    w: float
+    h: float
+    zone: str  # residential | commercial | industrial
+    district: str
+
+    def to_dict(self) -> dict:
+        return {"x": round(self.x, 1), "y": round(self.y, 1), "w": round(self.w, 1), "h": round(self.h, 1), "zone": self.zone,
+                "district": self.district}
 
 
 def generate_city(seed: int, n: int = 16, spacing: float = 260.0, developed_radius: float = 5.6) -> City:
@@ -202,10 +271,12 @@ def generate_city(seed: int, n: int = 16, spacing: float = 260.0, developed_radi
                 g.add_edge(a, b, length=spacing)
 
     zones = _zone_blocks(rng, developed, c)
+    zone_of: dict[tuple[int, int], str] = {}
     buildings: list[Building] = []
     counters: dict[str, int] = {}
     used: set[str] = set()
     for (i, j), zone in zones.items():
+        zone_of[(i, j)] = "industrial" if zone == "industrial" else "commercial" if zone in ("downtown", "local", "civic") else "residential"
         r, ang = block_info(i, j)
         district = CENTRE if r < 1.8 else DISTRICTS[int(((ang + math.pi) / (2 * math.pi)) * 8) % 8]
         for kind, (qx, qy, qw, qh), extra in _block_layout(rng, zone, r):
@@ -232,7 +303,7 @@ def generate_city(seed: int, n: int = 16, spacing: float = 260.0, developed_radi
             for k in range(t.jobs):
                 b.jobs.append(t.shifts[k % len(t.shifts)])
             buildings.append(b)
-    return City(size=(n - 1) * spacing, spacing=spacing, graph=g, buildings=buildings, developed=developed, n=n)
+    return City(size=(n - 1) * spacing, spacing=spacing, graph=g, buildings=buildings, developed=developed, n=n, zones=zone_of)
 
 
 def _zone_blocks(rng: np.random.Generator, developed: np.ndarray, c: float) -> dict[tuple[int, int], str]:

@@ -83,6 +83,10 @@ export const C = {
   lamp: 0xffd27a,
   awning: [0xd2463c, 0x3f8f6a, 0xf08a24, 0x3f63a5],
   wood: 0x8c6239,
+  dirt: 0xb48d5e,
+  sand: 0xe0c48a,
+  sheet: 0x3f6fb5,
+  crane: 0xf2b32a,
 };
 
 const pick = <T,>(xs: readonly T[], id: number, salt: number): T => xs[Math.floor(hash01(id, salt) * xs.length) % xs.length];
@@ -91,6 +95,7 @@ const pick = <T,>(xs: readonly T[], id: number, salt: number): T => xs[Math.floo
 export function buildingModel(b: Building): Model {
   const parts: Part[] = [];
   const windows: Win[] = [];
+  if (b.status === "construction") return siteModel(b);
   const kind = styleKind(b);
   const H = buildingHeight(b);
   const cx = b.x + b.w / 2;
@@ -396,6 +401,82 @@ export function buildingModel(b: Building): Model {
       P("box", cx, 0, cz, b.w * 0.7, Math.max(4, H), b.h * 0.6, C.concrete);
   }
   return { parts, windows };
+}
+
+/** How tall a building site will be once finished. */
+export function siteHeight(b: Building): number {
+  return buildingHeight({ ...b, households: b.planned ?? b.households });
+}
+
+/**
+ * A building site: tin-sheet fencing, a foundation, sand and bricks, and a tower crane
+ * taller than the finished building. The rising structure itself is drawn by the 3D
+ * view from each day's progress.
+ */
+export function siteModel(b: Building): Model {
+  const parts: Part[] = [];
+  const cx = b.x + b.w / 2;
+  const cz = b.y + b.h / 2;
+  const P = (s: Shape, x: number, y: number, z: number, w: number, h: number, d: number, c: number, more: Partial<Part> = {}) =>
+    parts.push({ s, x, y, z, w, h, d, c, bid: b.id, ...more });
+  P("box", cx, 0, cz, b.w, 0.45, b.h, C.dirt, { flat: true });
+  P("box", cx, 0.4, cz, b.w * 0.66, 1, b.h * 0.6, C.concrete); // foundation
+  // fencing on three sides, with a gate gap at the front
+  P("box", cx, 0, b.y + 1, b.w - 2, 2.6, 0.3, C.sheet);
+  P("box", b.x + 1, 0, cz, 0.3, 2.6, b.h - 2, C.sheet);
+  P("box", b.x + b.w - 1, 0, cz, 0.3, 2.6, b.h - 2, C.sheet);
+  P("box", b.x + b.w * 0.25, 0, b.y + b.h - 1, b.w * 0.45, 2.6, 0.3, C.sheet);
+  P("box", b.x + b.w * 0.85, 0, b.y + b.h - 1, b.w * 0.3, 2.6, 0.3, C.sheet);
+  P("cone", b.x + b.w * 0.18, 0, b.y + b.h * 0.82, 10, 4, 10, C.sand);
+  P("box", b.x + b.w * 0.82, 0, b.y + b.h * 0.18, 6, 2.4, 4, C.brick);
+  // the tower crane
+  const H = siteHeight(b) + 16;
+  const tx = b.x + b.w * 0.15;
+  const tz = b.y + b.h * 0.2;
+  P("box", tx, 0, tz, 2.2, H, 2.2, C.crane);
+  P("box", tx, H, tz, 3, 2.6, 3, C.crane); // cab
+  const jib = b.w * 0.85;
+  P("box", tx + jib / 2 - 2, H + 2.6, tz, jib, 1.2, 1.4, C.crane);
+  P("box", tx - 7, H + 2.6, tz, 12, 1.2, 1.4, C.crane);
+  P("box", tx - 11, H + 1, tz, 4, 2.6, 2.6, C.concrete); // counterweight
+  P("cyl", tx + jib * 0.6, H * 0.45, tz, 0.15, H * 0.55 + 2.6, 0.15, C.pole); // hook line
+  P("box", tx + jib * 0.6, H * 0.45 - 1, tz, 2.4, 1, 2.4, C.wood); // load
+  return { parts, windows: [] };
+}
+
+/** Zoned empty plots: a light pad in the zone's colour, corner stakes and a signboard. */
+export function plotModel(city: CityMap): Part[] {
+  const parts: Part[] = [];
+  const tint = { residential: 0xcfe6a8, commercial: 0xb4d0ec, industrial: 0xd3cabb } as const;
+  (city.plots ?? []).forEach((p, k) => {
+    const cx = p.x + p.w / 2;
+    const cz = p.y + p.h / 2;
+    parts.push({ s: "box", x: cx, y: 0, z: cz, w: p.w, h: 0.35, d: p.h, c: tint[p.zone] ?? 0xddd5c0, bid: -1, flat: true });
+    for (const [dx, dz] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+      parts.push({ s: "cyl", x: p.x + dx * p.w, y: 0, z: p.y + dz * p.h, w: 0.6, h: 2.2, d: 0.6, c: C.saffron, bid: -1 });
+    }
+    parts.push({ s: "cyl", x: cx - 3, y: 0, z: p.y + p.h - 4, w: 0.4, h: 4, d: 0.4, c: C.pole, bid: -1 });
+    parts.push({ s: "cyl", x: cx + 3, y: 0, z: p.y + p.h - 4, w: 0.4, h: 4, d: 0.4, c: C.pole, bid: -1 });
+    parts.push({ s: "box", x: cx, y: 2.6, z: p.y + p.h - 4, w: 8, h: 2.6, d: 0.3, c: k % 2 ? C.white : 0xfff3c4, bid: -1 });
+  });
+  // streets being laid: dirt roads lined with orange cones
+  for (const r of city.roadworks ?? []) {
+    const sides: [number, number, number, number, number][] = [
+      [r.x + r.w / 2, r.y, r.w, 20, 0],
+      [r.x + r.w / 2, r.y + r.h, r.w, 20, 0],
+      [r.x, r.y + r.h / 2, r.h, 20, Math.PI / 2],
+      [r.x + r.w, r.y + r.h / 2, r.h, 20, Math.PI / 2],
+    ];
+    for (const [x, z, len, wd, ry] of sides) {
+      parts.push({ s: "box", x, y: 0, z, w: len, h: 0.42, d: wd, ry, c: C.dirt, bid: -1, flat: true });
+      for (let d = -len / 2 + 10; d < len / 2; d += 26) {
+        const ox = Math.cos(ry) * d;
+        const oz = -Math.sin(ry) * d;
+        parts.push({ s: "cone", x: x + ox, y: 0.4, z: z + oz, w: 1.2, h: 1.8, d: 1.2, c: C.saffron, bid: -1 });
+      }
+    }
+  }
+  return parts;
 }
 
 function tree(parts: Part[], x: number, z: number, size: number, seed: number) {

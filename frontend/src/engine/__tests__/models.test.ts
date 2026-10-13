@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Building, CityMap } from "../../api/types";
-import { buildingModel, outskirtsModel, streetModel } from "../models";
+import { buildingModel, outskirtsModel, plotModel, siteHeight, siteModel, streetModel } from "../models";
 
 const kinds = ["home", "office", "shop", "restaurant", "factory", "school", "hospital", "police", "city_hall", "bank", "park", "bus_depot",
   "temple", "mosque", "church", "gurudwara", "vihara", "derasar", "agiary"];
@@ -41,5 +41,27 @@ describe("3D models", () => {
     expect(s.lamps).toHaveLength(3);
     expect(s.parts.some((p) => p.c === 0x5b5754 && p.w === 260)).toBe(true);
     expect(outskirtsModel(city, 1).length).toBeGreaterThan(5);
+  });
+
+  it("turns a building under construction into a site with a crane taller than the finished block", () => {
+    const b: Building = { ...lot(5, "home", 0), status: "construction", progress: 0.3, planned: 10 };
+    const m = buildingModel(b);
+    expect(m.windows).toHaveLength(0);
+    expect(m.parts.every((p) => p.bid === 5)).toBe(true);
+    const mast = Math.max(...m.parts.map((p) => p.y + p.h));
+    expect(mast).toBeGreaterThan(siteHeight(b));
+    expect(siteModel(b).parts.length).toBe(m.parts.length);
+  });
+
+  it("marks zoned plots and lines new streets with cones", () => {
+    const city: CityMap = {
+      name: "Kamalnagar", size: 520, spacing: 260, districts: [], activities: [], nodes: [], edges: [], buildings: [],
+      plots: [{ x: 10, y: 10, w: 104, h: 104, zone: "residential", district: "Nadi Kinara" }],
+      roadworks: [{ x: 0, y: 0, w: 260, h: 260 }],
+    };
+    const parts = plotModel(city);
+    expect(parts.filter((p) => p.c === 0xcfe6a8)).toHaveLength(1);
+    expect(parts.filter((p) => p.s === "cone").length).toBeGreaterThan(30);
+    expect(parts.every((p) => p.bid === -1)).toBe(true);
   });
 });

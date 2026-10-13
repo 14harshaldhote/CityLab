@@ -20,6 +20,7 @@ from . import lifecycle
 from .brain import Brain
 from .citygen import City, generate_city
 from .clock import MINUTES_PER_DAY, MINUTES_PER_HOUR, MINUTES_PER_YEAR, SimTime
+from .agencies import SITE_WAGE, Government
 from .economy import Economy
 from .events import Event, EventBus
 from .faith import PLACE_KINDS, festival_on
@@ -58,6 +59,7 @@ class World:
         self.brain = Brain(self)
         self.economy = Economy(self)
         self._founded = False
+        self.government = Government(self)
         self._populate(population)
         self.economy.found()
         self._founded = True
@@ -173,10 +175,24 @@ class World:
         b = self.city.buildings[building]
         slot = len(self.job_holders[building])
         shift = b.jobs[slot % len(b.jobs)]
-        wage = b.type.wage * (0.8 + 0.6 * p.skill)
+        wage = (SITE_WAGE if b.status == "construction" else b.type.wage) * (0.8 + 0.6 * p.skill)
         p.job = Job(building=building, shift=shift, wage=round(wage, 2), since=self.t)
         p.unemployed_since = None
         self.job_holders[building].append(p.id)
+
+    def register(self, b) -> None:
+        """A finished building joins the city: homes can be moved into, shops visited, schools enrolled in."""
+        if b.kind == "home":
+            self.occupancy.setdefault(b.id, [])
+        if b.jobs:
+            self.job_holders.setdefault(b.id, [])
+        if b.kind == "school":
+            self.pupils.setdefault(b.id, [])
+        if b.kind in self._by_kind:
+            self._by_kind[b.kind].append(b)
+        self._near_cache.clear()
+        if b.jobs and b.kind not in ("school", "hospital", "police", "city_hall", "park"):
+            self.economy.credit.setdefault(self.economy.company(b.id), 650.0)
 
     def fire(self, p: Person) -> None:
         if p.job is not None:
@@ -342,6 +358,8 @@ class World:
             "age": ages,
             "place": places,
             "car": cars,
+            "city_version": self.city.version,
+            "sites": [[b.id, round(b.progress, 3)] for b in self.city.buildings if b.status == "construction"],
             "counts": {ACTIVITY_NAMES[k]: acts.count(k) for k in range(len(ACTIVITY_NAMES))},
         }
 
@@ -418,6 +436,8 @@ class World:
             "social": self.social.summary(),
             "events": self.bus.count,
             "city": self.city.name,
+            "city_version": self.city.version,
+            "projects": len(self.government.projects) + len(self.government.roadworks),
             "religions": self.religions(alive),
             "festival": {"name": self.festival[1], "faith": RELIGION_LABEL[self.festival[0]], "text": self.festival[2]} if self.festival else None,
             "hours_simulated": t // MINUTES_PER_HOUR,

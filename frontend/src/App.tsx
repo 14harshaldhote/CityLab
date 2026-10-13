@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, liveFrames } from "./api/client";
-import type { BuildingCard, CityEvent, CityMap as City, DailyRow, Economy, Frame, PersonCard, Summary } from "./api/types";
+import type { Agencies, BuildingCard, CityEvent, CityMap as City, DailyRow, Economy, Frame, PersonCard, Summary } from "./api/types";
+import AgenciesPanel from "./components/AgenciesPanel";
 import BuildingPanel from "./components/BuildingPanel";
 import City3D from "./components/City3D";
 import CityMap from "./components/CityMap";
@@ -13,7 +14,7 @@ import { advise } from "./engine/advisor";
 import { LEGEND_KINDS, ROOF } from "./engine/art";
 import { ACTIVITY_COLORS, hex } from "./engine/view";
 
-type Tab = "city" | "person" | "place" | "economy" | "records" | "charts";
+type Tab = "city" | "person" | "place" | "agencies" | "economy" | "records" | "charts";
 
 function usePoll(fn: () => void, ms: number, deps: unknown[]) {
   useEffect(() => {
@@ -42,11 +43,16 @@ export default function App() {
   const [eventKind, setEventKind] = useState("");
   const [daily, setDaily] = useState<DailyRow[]>([]);
   const [econ, setEcon] = useState<Economy | null>(null);
+  const [agencies, setAgencies] = useState<Agencies | null>(null);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<{ id: number; name: string; age: number; activity: string | null }[]>([]);
 
+  const cityVersion = useRef<number | undefined>(undefined);
   const loadCity = useCallback(() => {
-    api.city().then(setCity, (e) => setError(String(e)));
+    api.city().then((c) => {
+      cityVersion.current = c.version;
+      setCity(c);
+    }, (e) => setError(String(e)));
   }, []);
   useEffect(loadCity, [loadCity]);
 
@@ -55,8 +61,13 @@ export default function App() {
       liveFrames((f) => {
         frames.current = { prev: frames.current.next, next: f, at: performance.now() };
         setFrame(f);
+        // the city grew (new streets, a new site, a building opened): fetch the new plan
+        if (f.city_version !== undefined && cityVersion.current !== undefined && f.city_version !== cityVersion.current) {
+          cityVersion.current = f.city_version;
+          loadCity();
+        }
       }, setConnected),
-    [],
+    [loadCity],
   );
 
   usePoll(() => api.summary().then(setSummary, () => undefined), 2000, []);
@@ -65,6 +76,7 @@ export default function App() {
   usePoll(() => buildingId !== null && api.building(buildingId).then(setBuilding, () => undefined), 1500, [buildingId]);
   usePoll(() => tab === "records" && api.events(eventKind || undefined).then(setEvents, () => undefined), 2500, [tab, eventKind]);
   usePoll(() => (tab === "economy" || tab === "city") && api.economy().then(setEcon, () => undefined), 3000, [tab]);
+  usePoll(() => tab === "agencies" && api.agencies().then(setAgencies, () => undefined), 2500, [tab]);
   usePoll(() => (tab === "charts" || tab === "city") && api.daily().then(setDaily, () => undefined), 5000, [tab]);
   const tips = useMemo(() => advise(summary, econ, daily), [summary, econ, daily]);
 
@@ -193,7 +205,7 @@ export default function App() {
         </section>
         <aside>
           <nav className="tabs">
-            {(["city", "person", "place", "economy", "records", "charts"] as Tab[]).map((t) => (
+            {(["city", "person", "place", "agencies", "economy", "records", "charts"] as Tab[]).map((t) => (
               <button key={t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>
                 {t[0].toUpperCase() + t.slice(1)}
               </button>
@@ -265,6 +277,8 @@ export default function App() {
           )}
           {tab === "person" && (person ? <PersonPanel card={person} net={net && net.center === person.id ? net : null} onPick={pickPerson} /> : <div className="card muted">Click a person on the map.</div>)}
           {tab === "place" && (building ? <BuildingPanel card={building} onPick={pickPerson} /> : <div className="card muted">Click a building on the map.</div>)}
+          {tab === "agencies" &&
+            (agencies ? <AgenciesPanel data={agencies} onPickPerson={pickPerson} onPickBuilding={pickBuilding} /> : <div className="card muted">Asking City Hall...</div>)}
           {tab === "economy" && (econ ? <EconomyPanel econ={econ} onPickBuilding={pickBuilding} /> : <div className="card muted">Loading the books...</div>)}
           {tab === "records" && (
             <div className="card">
@@ -282,6 +296,10 @@ export default function App() {
                 <option value="retired">Retirements</option>
                 <option value="arrived">Arrivals</option>
                 <option value="festival">Festivals</option>
+                <option value="zoning">Zoning</option>
+                <option value="roads">New streets</option>
+                <option value="construction">Construction</option>
+                <option value="opened">New buildings</option>
                 <option value="loan">Loans</option>
                 <option value="laid_off">Lay-offs</option>
                 <option value="default">Defaults</option>

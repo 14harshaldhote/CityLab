@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { CityMap as City, Frame } from "../api/types";
 import { daylight, hash01 } from "../engine/art";
-import { buildingModel, outskirtsModel, streetModel, type Part, type Shape, type Win } from "../engine/models";
+import { buildingModel, outskirtsModel, plotModel, siteHeight, streetModel, type Part, type Shape, type Win } from "../engine/models";
 import { skyAt } from "../engine/sky";
 import { lerpFrames } from "../engine/view";
 
@@ -75,6 +75,7 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
   picks.current = { onPickPerson, onPickBuilding };
   const api = useRef<{ reset: () => void; follow: (on: boolean) => void } | null>(null);
   const [following, setFollowing] = useState(false);
+  const saved = useRef<{ pos: THREE.Vector3; target: THREE.Vector3 } | null>(null); // keep the view when the city grows
 
   useEffect(() => {
     const el = host.current!;
@@ -104,7 +105,11 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
       camera.position.set(size * 0.5, size * 0.45, size * 1.2);
       controls.update();
     };
-    reset();
+    if (saved.current) {
+      camera.position.copy(saved.current.pos);
+      controls.target.copy(saved.current.target);
+      controls.update();
+    } else reset();
 
     // light: a sky dome, the sun (or moon) with shadows, and a soft fill
     const hemi = new THREE.HemisphereLight(0xdbeeff, 0xb59a6a, 1.2);
@@ -142,7 +147,7 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
       windows.push(...m.windows);
     }
     const streets = streetModel(city);
-    parts.push(...streets.parts, ...outskirtsModel(city));
+    parts.push(...streets.parts, ...outskirtsModel(city), ...plotModel(city));
 
     const pickable: THREE.InstancedMesh[] = [];
     const meshBids = new Map<THREE.InstancedMesh, Int32Array>();
@@ -204,6 +209,34 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
       scene.add(m);
     }
     for (let i = 0; i < MAX; i++) carTop.setColorAt(i, col.setHex(0x5b7590));
+
+    // building sites: the structure rises day by day inside its bamboo scaffolding
+    const sites = city.buildings.filter((b) => b.status === "construction");
+    const siteCore = new THREE.InstancedMesh(geo.box, solid, Math.max(1, sites.length));
+    const siteScaffold = new THREE.InstancedMesh(
+      new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0),
+      new THREE.MeshBasicMaterial({ color: 0xa7814a, wireframe: true }),
+      Math.max(1, sites.length),
+    );
+    siteCore.count = siteScaffold.count = sites.length;
+    siteCore.castShadow = true;
+    sites.forEach((b, i) => siteCore.setColorAt(i, col.setHex(b.kind === "home" ? 0xd7cbb8 : 0xc9c4ba)));
+    scene.add(siteCore, siteScaffold);
+    const raise = (frame: Frame) => {
+      const progress = new Map(frame.sites ?? []);
+      sites.forEach((b, i) => {
+        const p = progress.get(b.id) ?? b.progress ?? 0;
+        const h = Math.max(1.5, siteHeight(b) * p);
+        const cx = b.x + b.w / 2;
+        const cz = b.y + b.h / 2;
+        place(siteCore, i, cx, 1.4, cz, b.w * 0.6, h, b.h * 0.55);
+        place(siteScaffold, i, cx, 1.4, cz, b.w * 0.6 + 3, h + 3, b.h * 0.55 + 3);
+      });
+      siteCore.instanceMatrix.needsUpdate = siteScaffold.instanceMatrix.needsUpdate = true;
+      siteCore.computeBoundingSphere();
+    };
+    meshBids.set(siteCore, Int32Array.from(sites.map((b) => b.id)));
+    pickable.push(siteCore);
 
     const ring = new THREE.Mesh(
       new THREE.RingGeometry(0.82, 1, 48).rotateX(-Math.PI / 2),
@@ -275,6 +308,7 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
       if (next.t !== lastT) {
         lastT = next.t;
         const night = sky(next);
+        raise(next);
         if (Math.abs(night - lastNight) > 0.02 || next.t % 10 === 0 || lastNight < 0) {
           lastNight = night;
           lightUp(next, night);
@@ -438,6 +472,7 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
     };
 
     return () => {
+      saved.current = { pos: camera.position.clone(), target: controls.target.clone() };
       renderer.setAnimationLoop(null);
       resize.disconnect();
       controls.dispose();

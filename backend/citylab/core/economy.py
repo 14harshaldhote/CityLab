@@ -252,7 +252,7 @@ class Economy:
         w = self.w
         for bid in sorted(self.attendance):
             b = w.city.buildings[bid]
-            if b.kind not in EXPORTERS:
+            if b.kind not in EXPORTERS or b.status != "open":
                 continue
             value = 0.0
             for pid in self.attendance[bid]:
@@ -316,7 +316,7 @@ class Economy:
             self.transfer(self.company(bid), "city", self.company_sales[bid] * BUSINESS_TAX, "business tax")
         for bid, holders in sorted(w.job_holders.items()):
             b = w.city.buildings[bid]
-            if b.kind in PUBLIC or b.kind in OWN_PAYER:
+            if b.kind in PUBLIC or b.kind in OWN_PAYER or b.status != "open":
                 continue
             acct = self.company(bid)
             cushion = 30 * sum(w.people[q].job.wage for q in holders if w.people[q].job) + 5000.0
@@ -409,7 +409,7 @@ class Economy:
         w = self.w
         for bid, holders in sorted(w.job_holders.items()):
             b = w.city.buildings[bid]
-            if b.kind in PUBLIC or b.kind in OWN_PAYER or not holders:
+            if b.kind in PUBLIC or b.kind in OWN_PAYER or not holders or b.status != "open":
                 continue
             acct = self.company(bid)
             if self.balance[acct] >= 0:
@@ -475,7 +475,7 @@ class Economy:
     def companies(self) -> list[dict[str, Any]]:
         out = []
         for b in self.w.city.buildings:
-            if b.jobs and b.kind not in PUBLIC and b.kind not in OWN_PAYER:
+            if b.jobs and b.kind not in PUBLIC and b.kind not in OWN_PAYER and b.status == "open":
                 acct = self.company(b.id)
                 out.append({"id": b.id, "name": b.name, "kind": b.kind, "balance": round(self.balance[acct], 2),
                             "workers": len(self.w.job_holders.get(b.id, [])), "jobs": len(b.jobs), "debt": round(self._debt(acct), 2)})

@@ -31,7 +31,12 @@ completely free and runs on your own computer.
    city's budget and the companies doing best and worst.
 7. **Watch a family grow.** In Records, pick *Births* or *Couples*, then open the
    people involved and follow their family tree.
-8. **Switch to the flat map.** Press *Map* for a colourful, hand-drawn view where
+8. **Watch the city grow.** Let it run for a few weeks. When homes start filling up,
+   the town planners mark out new land, road crews lay fresh streets, and builders
+   put up fences and tower cranes. Open the *Agencies* tab to see every building
+   site, who's paying for it and how many days are left. When a housing society
+   is finished, new families move in.
+9. **Switch to the flat map.** Press *Map* for a colourful, hand-drawn view where
    every dot is a person, coloured by what they're doing.
 
 ![Kamalnagar at night](docs/images/city-night.png)
@@ -54,10 +59,14 @@ These are the same ideas that power modern games and AI, in plain words.
 * **Life follows real patterns.** Birthdays, school, first jobs, weddings, babies
   and old age follow the curves real populations follow. Nobody scripts the
   population; it grows or shrinks on its own.
+* **The city plans ahead.** The municipal corporation keeps an eye on how full
+  the homes are, how many jobs are waiting and whether there are enough shops and
+  school seats. When something runs short, it decides what to build next, a bit
+  like the planners in a city-building game.
 * **Money can't leak.** Every rupee is always somewhere: in a person's account, a
   shop's till, the city's budget or the bank. When it moves, it leaves one place
   and arrives in another, just like a real bank's books.
-* **The city keeps a diary.** Every birth, wedding, new job, festival and loan is
+* **The city keeps a diary.** Every birth, wedding, new job, festival, loan and new building is
   written down in plain English. Soon you'll be able to ask the city questions,
   like "who are the busiest people in Phool Baug?", and an AI running on your own
   computer will answer from that diary.
@@ -77,8 +86,13 @@ These are the same ideas that power modern games and AI, in plain words.
   police station, the municipal corporation and City Bank.
 * **Places of worship:** mandirs, masjids, a church, a gurudwara with its free
   langar, a Buddha vihar, a Jain derasar and a Parsi agiary.
-* **Money:** wages, rent, groceries, taxes, pensions, savings, loans, and
-  companies that grow or lay people off.
+* **Money:** wages, rent, groceries, water bills, taxes, pensions, savings,
+  loans, and companies that grow or lay people off.
+* **People who run the city:** a town planning office, a public works department
+  that lays roads, an education department, the water supply, and local builders
+  who borrow from City Bank to put up new homes and shops.
+
+![New housing societies going up in Nadi Kinara](docs/images/city-growing.png)
 
 ![Someone's life story](docs/images/person-card.png)
 

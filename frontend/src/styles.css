@@ -679,3 +679,44 @@ aside {
 .map-legend {
   top: 56px !important;
 }
+
+/* ---- agencies ---- */
+.projects,
+.depts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.projects li,
+.depts li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1.5px dashed var(--line);
+  border-radius: 10px 6px 11px 7px;
+  background: var(--panel-2);
+}
+
+.bar {
+  height: 9px;
+  margin: 5px 0 3px;
+  border-radius: 6px 3px 7px 4px;
+  background: rgba(59, 47, 39, 0.12);
+  overflow: hidden;
+}
+
+.bar i {
+  display: block;
+  height: 100%;
+  background: repeating-linear-gradient(45deg, #f2b32a 0 8px, #e09a12 8px 16px);
+}
+
+.depts .watching {
+  font-size: 13px;
+  padding-left: 8px;
+  border-left: 3px solid var(--sage);
+}

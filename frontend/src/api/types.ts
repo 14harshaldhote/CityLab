@@ -16,10 +16,27 @@ export interface Building {
   central?: boolean;
   households: number;
   jobs: number;
+  status?: "open" | "construction";
+  progress?: number;
+  owner?: string;
+  opened_day?: number;
+  planned?: number;
+}
+
+export interface Plot {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  zone: "residential" | "commercial" | "industrial";
+  district: string;
 }
 
 export interface CityMap {
   name: string;
+  version?: number;
+  plots?: Plot[];
+  roadworks?: { x: number; y: number; w: number; h: number }[];
   size: number;
   spacing: number;
   nodes: CityNode[];
@@ -51,6 +68,8 @@ export interface Frame {
   age: number[];
   place: number[];
   car?: number[];
+  city_version?: number;
+  sites?: [number, number][];
   counts: Record<string, number>;
   playing: boolean;
   speed: number;
@@ -137,6 +156,15 @@ export interface BuildingCard extends Building {
   workers: number;
   pupils: number;
   company: { public: boolean; funded_by?: string; balance?: number; credit_score?: number; debt?: number } | null;
+}
+
+export interface Agencies {
+  day: number;
+  departments: { key: string; name: string; sector: "government" | "private"; does: string; watching: string; head: { id: number; name: string } | null; spent: number; done: number }[];
+  projects: { building: number; name: string; kind: string; district: string; owner: string; progress: number; started_day: number; days_left: number; crew: number; crew_needed: number; why: string }[];
+  roadworks: { district: string; zone: string; progress: number; why: string }[];
+  plots: Record<string, number>;
+  finished: { building: number; name: string; kind: string; owner: string; day: number; district: string }[];
 }
 
 export interface CompanyRow {

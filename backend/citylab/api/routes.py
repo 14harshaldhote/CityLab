@@ -45,6 +45,13 @@ def city(request: Request) -> dict[str, Any]:
     return out
 
 
+@router.get("/agencies")
+def agencies(request: Request) -> dict[str, Any]:
+    r = runner(request)
+    with r.lock:
+        return r.world.government.view()
+
+
 @router.get("/frame")
 def frame(request: Request) -> dict[str, Any]:
     return runner(request).frame()

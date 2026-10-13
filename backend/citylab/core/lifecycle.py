@@ -65,6 +65,7 @@ def end_of_day(w: World) -> None:
     w.today.new_friendships += w.social.close_triads(w.streams("social"), [p.id for p in alive], {p.id: 0.04 * p.extraversion for p in alive})
     w.social.fade()
     w.visits = {}
+    w.government.daily()  # departments and builders, before the books close (crews are paid with today's wages)
     money = w.economy.end_of_day()
 
     for p in alive:
@@ -252,7 +253,8 @@ def _migration(w: World, rng: np.random.Generator) -> None:
     open_jobs = len(w.vacancies())
     free_homes = sum(w.city.buildings[b].households - len(o) for b, o in w.occupancy.items())
     pull = max(0, open_jobs - seekers)
-    n_households = min(int(free_homes * 0.25), int(rng.poisson(pull * 0.003)))
+    # newcomers follow open jobs, but a town only absorbs so many families a week
+    n_households = min(int(free_homes * 0.25), int(rng.poisson(min(pull * 0.008, len(alive) * 0.004))))
     residents = [p.id for p in alive if p.age(t) >= 18]
     for _ in range(n_households):
         anchor = w.social.pick_by_degree(rng, residents) if residents and rng.random() < 0.6 else None

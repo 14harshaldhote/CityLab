@@ -253,6 +253,17 @@ function drawGround(g: Graphics, city: City) {
     const park = b.kind === "park";
     g.roundRect(b.x - 7, b.y - 7, b.w + 14, b.h + 14, 4).fill(park ? PALETTE.grass : PALETTE.sidewalk);
   }
+  // zoned plots waiting for a builder, and streets being laid
+  const zoneTint: Record<string, number> = { residential: 0x9fc46a, commercial: 0x6f9fd0, industrial: 0x9a8f80 };
+  for (const p of city.plots ?? []) {
+    g.rect(p.x, p.y, p.w, p.h).fill({ color: zoneTint[p.zone] ?? 0xcccccc, alpha: 0.28 }).stroke({ width: 2, color: zoneTint[p.zone] ?? 0xcccccc, alpha: 0.9 });
+  }
+  for (const r of city.roadworks ?? []) {
+    g.rect(r.x, r.y, r.w, r.h).stroke({ width: 18, color: 0xb48d5e, alpha: 0.9 });
+    for (let d = 0; d < r.w; d += 30) {
+      for (const [x, y] of [[r.x + d, r.y], [r.x + d, r.y + r.h], [r.x, r.y + d], [r.x + r.w, r.y + d]]) g.circle(x, y, 3).fill(0xf08a24);
+    }
+  }
   const byId = new Map(city.nodes.map((n) => [n.id, n]));
   const seg = (fn: (ax: number, ay: number, bx: number, by: number) => void) => {
     for (const [a, b] of city.edges) {
@@ -310,6 +321,20 @@ function drawGround(g: Graphics, city: City) {
 }
 
 function drawBuilding(g: Graphics, b: Building, height: number) {
+  if (b.status === "construction") {
+    // a building site: bare earth, a rising frame, and a crane
+    g.rect(b.x, b.y, b.w, b.h).fill(0xc9a273).stroke({ width: 2, color: 0x3f6fb5 });
+    for (let k = 8; k < b.w + b.h; k += 10) {
+      g.moveTo(b.x + Math.max(0, k - b.h), b.y + Math.min(k, b.h)).lineTo(b.x + Math.min(k, b.w), b.y + Math.max(0, k - b.w));
+    }
+    g.stroke({ width: 1, color: 0x8c6239, alpha: 0.35 });
+    const tx = b.x + b.w * 0.15;
+    const ty = b.y + b.h * 0.2;
+    g.moveTo(tx, ty + 10).lineTo(tx, ty - 34).lineTo(tx + b.w * 0.8, ty - 34).moveTo(tx - 10, ty - 34).lineTo(tx, ty - 34);
+    g.stroke({ width: 3, color: 0xf2b32a });
+    g.moveTo(tx + b.w * 0.5, ty - 34).lineTo(tx + b.w * 0.5, ty - 10).stroke({ width: 1, color: PALETTE.ink });
+    return;
+  }
   if (b.kind === "park") return;
   const kind = styleKind(b);
   const roof = ROOF[kind] ?? 0xcccccc;

@@ -8,6 +8,13 @@ export default function BuildingPanel({ card, onPick }: { card: BuildingCard; on
       <p className="muted">
         {card.kind.replace("_", " ")} in {card.district} · {card.open ? "open now" : "closed now"}
       </p>
+      {card.status === "construction" && (
+        <p className="now">
+          Under construction by <b>{card.owner}</b>: {Math.round((card.progress ?? 0) * 100)}% done.
+          {card.planned ? ` It will have ${card.planned} homes.` : ""}
+        </p>
+      )}
+      {!!card.opened_day && card.status !== "construction" && <p className="muted small">Built by {card.owner}, opened on day {card.opened_day}.</p>}
       <p>
         {card.households > 0 && `${card.residents} residents in ${card.households} homes. `}
         {card.jobs > 0 && `${card.workers} of ${card.jobs} jobs filled. `}
