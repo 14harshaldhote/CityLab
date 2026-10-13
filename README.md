@@ -17,8 +17,8 @@ come from there.
 | Stage | What it adds | Status |
 |---|---|---|
 | 1 | Foundation: simulation clock, seeded randomness, event bus and log, weather and daylight, generated city with streets, routing, Postgres storage | done |
-| 2 | People and their day: needs, personality, schedules, utility AI, live map | next |
-| 3 | Life cycle and the social graph: ageing, couples, births, deaths, migration | planned |
+| 2 | People and their day: needs, personality, schedules, utility AI, friendships from shared places, API and live map | done |
+| 3 | Life cycle and the social graph: ageing, couples, births, deaths, jobs, migration | next |
 | 4 | Economy and the bank | planned |
 | 5 | Government agencies, zoning and new buildings | planned |
 | 6 | Roads, traffic and buses | planned |
@@ -26,6 +26,64 @@ come from there.
 | 8 | History and rewind, what-if branches | planned |
 | 9 | RAG: "Ask the city" (local, free models via Ollama) | planned |
 | 10 | AI leaders, featured citizens, city growth | planned |
+
+![A person's card next to the live map](docs/images/person-card.png)
+
+## Run it
+
+With Docker (city, API, web page and Postgres):
+
+```bash
+docker compose up --build
+# open http://localhost:8080
+```
+
+Without Docker:
+
+```bash
+cd backend && pip install -e ".[dev]" && uvicorn citylab.main:app --port 8000
+cd frontend && npm install && npm run dev   # open http://localhost:5173
+```
+
+Settings are environment variables: `CITYLAB_SEED`, `CITYLAB_POPULATION` (default
+2000), `CITYLAB_SPEED` (simulated minutes per real second, default 10),
+`CITYLAB_AUTOPLAY`, `CITYLAB_DATABASE_URL` (optional Postgres).
+
+## Stage 2: people and their day
+
+* **Who lives here** (`core/world.py`): the city is founded with about 2,000
+  people in households (singles, couples, families, single parents, retired
+  couples), with ages, Big Five personalities, skills, homes, cars for some
+  households, schools for children and jobs for most adults, near home where
+  possible.
+* **Needs** (`core/people.py`): hunger, energy, social and fun drain over time;
+  each activity restores some and costs others. Needs are updated lazily, only when
+  a person decides, which is exact because rates are constant within an activity.
+* **The brain** (`core/brain.py`): a schedule (shifts, school days, two rotating days
+  off for shift workers, small children kept at home) plus utility AI. Every option
+  (sleep, eat at home, eat out, work, school, visit a friend, park, shop, relax) is
+  scored from needs, personality, time of day, weather, opening hours and distance,
+  with a little noise. The best one wins. No language model, microseconds per
+  decision.
+* **The tick loop**: people sit in a priority queue keyed by when their current
+  activity ends; each simulated minute only pops the people who need to decide.
+  Positions between decisions are read off the planned route.
+* **Friendships** (`core/social.py`): people who share a workplace, school, park or
+  restaurant meet; the person met is picked in proportion to how many ties they
+  already have (preferential attachment), friends of friends get introduced
+  (triadic closure), and unused ties fade.
+* **API** (`api/routes.py`): `/api/city`, `/api/frame`, `/api/summary`,
+  `/api/people/{id}`, `/api/buildings/{id}`, `/api/events`, `/api/stats/daily`,
+  `/api/control`, `/api/reset`, and a WebSocket `/api/ws` that streams every
+  person's position five times a second.
+* **The page** (`frontend/`): React + TypeScript, the map drawn with
+  [PixiJS](https://pixijs.com/) (WebGL) so thousands of moving dots stay smooth,
+  charts with D3. Pan, zoom, click a person to follow them (needs, personality,
+  family, friends, life story) or a building to see who is inside. Night falls with
+  the real sun angle and street lamps come on.
+
+On a laptop the city of 2,000 runs at roughly one simulated day per 1.3 seconds
+(`python -m benchmarks.bench`).
 
 ## Stage 1: the foundation
 
