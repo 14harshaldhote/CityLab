@@ -61,6 +61,7 @@ def end_of_day(w: World) -> None:
     w.today.new_friendships += w.social.close_triads(w.streams("social"), [p.id for p in alive], {p.id: 0.04 * p.extraversion for p in alive})
     w.social.fade()
     w.visits = {}
+    money = w.economy.end_of_day()
 
     for p in alive:
         _birthday(w, p, t)
@@ -80,6 +81,7 @@ def end_of_day(w: World) -> None:
 
     row = w.summary()
     row.update(asdict(w.today))
+    row.update({k: v for k, v in money.items() if k != "flows"})
     row["day"] = SimTime(t).day
     row["clustering"] = w.social.clustering() if SimTime(t).day % 7 == 0 else (w.daily[-1]["clustering"] if w.daily else 0.0)
     w.daily.append(row)
@@ -122,6 +124,7 @@ def _die(w: World, p: Person) -> None:
     age = int(p.age(t))
     w.fire(p)
     w.unenrol(p)
+    w.economy.close(p, "died")
     if p.partner is not None and p.partner in w.people:
         w.people[p.partner].partner = None
     _leave_household(w, p)
@@ -291,6 +294,7 @@ def _migration(w: World, rng: np.random.Generator) -> None:
                 p.alive = False  # gone from the city (not dead): the registry keeps them
                 p.died = None
                 w.unenrol(p)
+                w.economy.close(p, "left")
                 if p.partner is not None and p.partner not in leaving and p.partner in w.people:
                     w.people[p.partner].partner = None
                 w.social.remove_person(q)

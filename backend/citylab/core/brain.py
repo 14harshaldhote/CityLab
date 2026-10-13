@@ -131,11 +131,11 @@ class Brain:
         adult = age >= 18
         if adult:
             r = w.nearest_open(here, "restaurant", t)
-            if r is not None:
+            if r is not None and w.economy.can_afford(p, w.economy.meal_price()):
                 evening = 0.3 if 19 <= hour < 22 else 0.0
                 options.append((urgency(p.hunger) * 2.2 + 0.3 * p.extraversion + evening - self._far(here, r), EAT_OUT, r, t + 50))
             s = w.nearest_open(here, "shop", t)
-            if s is not None:
+            if s is not None and w.economy.can_afford(p, 60.0):
                 options.append((urgency(p.fun) * 1.0 + 0.2 - self._far(here, s), SHOP, s, t + 40))
 
         if not night or adult and hour < 23:
@@ -192,4 +192,11 @@ class Brain:
         p.until = max(until, t + 5)
         if activity in VISIT_KINDS:
             self.w.visits.setdefault(place, []).append(p.id)
+        econ = self.w.economy
+        if activity == WORK:
+            econ.attendance[place].append(p.id)
+        elif activity == EAT_OUT:
+            econ.purchase(p, place, econ.meal_price(), "meals out")
+        elif activity == SHOP:
+            econ.purchase(p, place, econ.shopping_price(), "shopping")
         self.w.schedule(p)

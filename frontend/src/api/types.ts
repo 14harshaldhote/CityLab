@@ -115,6 +115,7 @@ export interface PersonCard {
   until: string | null;
   friends: { id: number; name: string; strength: number }[];
   friend_count: number;
+  money: { balance: number; credit_score: number; debt: number; loans: { balance: number; rate: number; instalment: number; missed: number }[] };
   life: CityEvent[];
 }
 
@@ -125,6 +126,36 @@ export interface BuildingCard extends Building {
   residents: number;
   workers: number;
   pupils: number;
+  company: { public: boolean; funded_by?: string; balance?: number; credit_score?: number; debt?: number } | null;
+}
+
+export interface CompanyRow {
+  id: number;
+  name: string;
+  kind: string;
+  balance: number;
+  workers: number;
+  jobs: number;
+  debt: number;
+}
+
+export interface Economy {
+  money_people: number;
+  money_companies: number;
+  median_balance: number;
+  in_debt: number;
+  city: number;
+  bank: number;
+  loans_outstanding: number;
+  loans: number;
+  base_rate: number;
+  savings_rate: number;
+  loan_rate_typical: number;
+  gdp: number;
+  tax: number;
+  flows: Record<string, number>;
+  richest_companies: CompanyRow[];
+  struggling_companies: CompanyRow[];
 }
 
 export interface DailyRow {
@@ -140,4 +171,10 @@ export interface DailyRow {
   new_friendships: number;
   ties: number;
   clustering: number;
+  median_balance: number;
+  city: number;
+  loans_outstanding: number;
+  gdp: number;
+  tax: number;
+  in_debt: number;
 }

@@ -141,7 +141,21 @@ def building(bid: int, request: Request) -> dict[str, Any]:
             residents=len(residents),
             workers=len(w.job_holders.get(bid, [])),
             pupils=len(w.pupils.get(bid, [])),
+            company=w.economy.company_view(bid),
         )
+    return out
+
+
+@router.get("/economy")
+def economy(request: Request) -> dict[str, Any]:
+    r = runner(request)
+    with r.lock:
+        econ = r.world.economy
+        out = econ.summary()
+        companies = econ.companies()
+        out["richest_companies"] = companies[:8]
+        out["struggling_companies"] = [c for c in reversed(companies) if c["balance"] < 0][:8]
+        out["loan_rate_typical"] = econ.loan_rate("p:-1")
     return out
 
 

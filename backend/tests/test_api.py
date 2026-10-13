@@ -19,7 +19,7 @@ def test_city_frame_and_people():
         assert f["label"].endswith("09:00")
         pid = f["ids"][0]
         card = c.get(f"/api/people/{pid}").json()
-        assert card["name"] and "needs" in card and "personality" in card
+        assert card["name"] and "needs" in card and "personality" in card and "balance" in card["money"]
         assert c.get("/api/people/999999").status_code == 404
         net = c.get(f"/api/people/{pid}/network").json()
         assert net["center"] == pid and net["nodes"][0]["id"] == pid
@@ -34,7 +34,10 @@ def test_controls_reset_and_websocket():
         assert c.post("/api/control", json={"playing": True, "speed": 60}).json() == {"playing": True, "speed": 60.0, "t": 0}
         assert c.post("/api/control", json={"speed": 10**9}).status_code == 422
         c.post("/api/control", json={"advance_minutes": 24 * 60})
-        assert len(c.get("/api/stats/daily").json()) == 1
+        daily = c.get("/api/stats/daily").json()
+        assert len(daily) == 1 and daily[0]["gdp"] > 0
+        econ = c.get("/api/economy").json()
+        assert econ["loans"] >= 0 and econ["richest_companies"] and "base_rate" in econ
         assert c.get("/api/events", params={"kind": "day_summary"}).json()[0]["kind"] == "day_summary"
         assert c.post("/api/reset", json={"seed": 3, "population": 100}).json()["population"] >= 95
         with c.websocket_connect("/api/ws") as ws:

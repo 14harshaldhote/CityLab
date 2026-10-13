@@ -19,8 +19,8 @@ come from there.
 | 1 | Foundation: simulation clock, seeded randomness, event bus and log, weather and daylight, generated city with streets, routing, Postgres storage | done |
 | 2 | People and their day: needs, personality, schedules, utility AI, friendships from shared places, API and live map | done |
 | 3 | Life cycle and the social graph: ageing, couples, births, deaths, jobs, migration | done |
-| 4 | Economy and the bank | next |
-| 5 | Government agencies, zoning and new buildings | planned |
+| 4 | Economy and the bank: accounts, wages, taxes, rent, shopping, loans, lay-offs | done |
+| 5 | Government agencies, zoning and new buildings | next |
 | 6 | Roads, traffic and buses | planned |
 | 7 | Crime, police, CCTV and courts | planned |
 | 8 | History and rewind, what-if branches | planned |
@@ -48,6 +48,37 @@ cd frontend && npm install && npm run dev   # open http://localhost:5173
 Settings are environment variables: `CITYLAB_SEED`, `CITYLAB_POPULATION` (default
 2000), `CITYLAB_SPEED` (simulated minutes per real second, default 10),
 `CITYLAB_AUTOPLAY`, `CITYLAB_DATABASE_URL` (optional Postgres).
+
+## Stage 4: money and City Bank
+
+`core/economy.py` gives every person, company, the city, the landlord and City Bank
+an account, and money only moves by double-entry transfer, so the books always
+balance (the simulation checks this every midnight, to the paisa). Money enters
+and leaves through one account, the outside world.
+
+* **During the day** people pay for meals out and shopping on the spot (with 5%
+  sales tax). The brain skips those options when someone cannot afford them.
+* **Every midnight**: wages for each shift actually worked (15% income tax
+  withheld; the city pays teachers, doctors, police and City Hall staff, the bank
+  pays its own); offices, factories and the bus depot sell their output to the
+  outside world in proportion to who turned up and how skilled they are; every
+  household pays rent and buys groceries from its nearest shop; the city pays
+  pensions and unemployment benefit; shops pay for their stock; companies pay
+  business tax and, once they have a cushion, dividends; the landlord pays upkeep
+  and property tax.
+* **City Bank** pays interest on savings (base rate minus 3%), charges base rate
+  plus 3% plus a risk premium on loans, turns overdrafts into amortised one-year
+  loans for people and companies with good credit, lowers credit scores for missed
+  payments and writes loans off after 60 missed days. The city borrows when its
+  budget runs dry.
+* **Companies** that still run out of money lay people off. Money is inherited by a
+  partner or children when someone dies and leaves with households that move away.
+
+The Economy tab shows the bank, the city budget, today's money flows and the
+richest and struggling companies; person and building cards show balances, debts
+and credit scores.
+
+![The Economy tab](docs/images/economy.png)
 
 ## Stage 3: life, growth and the social graph
 

@@ -20,6 +20,7 @@ from . import lifecycle
 from .brain import Brain
 from .citygen import City, generate_city
 from .clock import MINUTES_PER_DAY, MINUTES_PER_HOUR, MINUTES_PER_YEAR, SimTime
+from .economy import Economy
 from .events import Event, EventBus
 from .names import FEMALE, MALE, SURNAMES
 from .people import ACTIVITY_NAMES, SLEEP, TRAVEL, Household, Job, Person
@@ -53,7 +54,11 @@ class World:
         self._by_kind = {k: [b for b in self.city.buildings if b.kind == k] for k in ("restaurant", "shop", "park", "school")}
         self._near_cache: dict[tuple[int, str], list] = {}
         self.brain = Brain(self)
+        self.economy = Economy(self)
+        self._founded = False
         self._populate(population)
+        self.economy.found()
+        self._founded = True
 
     # ---- time -------------------------------------------------------------------------
 
@@ -119,6 +124,8 @@ class World:
                 if sib != pid:
                     self.social.tie(pid, sib, "sibling")
         self.schedule(p)
+        if self._founded:
+            self.economy.open(p)
         return p
 
     def new_household(self, home: int, has_car: bool) -> Household:
@@ -370,6 +377,7 @@ class World:
             "until": SimTime(p.until).label() if p.alive else None,
             "friends": friends,
             "friend_count": len(self.social.friends(pid)),
+            "money": self.economy.person_view(pid),
         }
 
     def summary(self) -> dict[str, Any]:

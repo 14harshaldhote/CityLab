@@ -1,6 +1,8 @@
 import type { PersonCard, PersonRef } from "../api/types";
 import EgoGraph, { type Network } from "./EgoGraph";
 
+export const fmt = (v: number) => v.toLocaleString(undefined, { maximumFractionDigits: 0 });
+
 const TRAITS: [string, string][] = [
   ["openness", "Curious"],
   ["conscientiousness", "Organised"],
@@ -56,6 +58,18 @@ export default function PersonPanel({ card, net, onPick }: { card: PersonCard; n
               : card.unemployed
                 ? "Looking for work."
                 : "Not working."}
+      </p>
+
+      <h3>Money</h3>
+      <p>
+        Bank balance <b>{fmt(card.money.balance)}</b> · credit score {card.money.credit_score}
+        {card.money.debt > 0 && (
+          <>
+            {" "}
+            · owes {fmt(card.money.debt)} on {card.money.loans.length} loan{card.money.loans.length > 1 ? "s" : ""}
+            {card.money.loans.some((l) => l.missed > 0) && <span className="warn"> (behind on payments)</span>}
+          </>
+        )}
       </p>
 
       <h3>Family</h3>

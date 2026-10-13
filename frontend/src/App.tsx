@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, liveFrames } from "./api/client";
-import type { BuildingCard, CityEvent, CityMap as City, DailyRow, Frame, PersonCard, Summary } from "./api/types";
+import type { BuildingCard, CityEvent, CityMap as City, DailyRow, Economy, Frame, PersonCard, Summary } from "./api/types";
 import BuildingPanel from "./components/BuildingPanel";
 import CityMap from "./components/CityMap";
+import EconomyPanel from "./components/EconomyPanel";
 import type { Network } from "./components/EgoGraph";
 import LineChart from "./components/LineChart";
 import PersonPanel from "./components/PersonPanel";
 import TimeBar from "./components/TimeBar";
 import { ACTIVITY_COLORS, hex } from "./engine/view";
 
-type Tab = "city" | "person" | "place" | "records" | "charts";
+type Tab = "city" | "person" | "place" | "economy" | "records" | "charts";
 
 function usePoll(fn: () => void, ms: number, deps: unknown[]) {
   useEffect(() => {
@@ -36,6 +37,7 @@ export default function App() {
   const [events, setEvents] = useState<CityEvent[]>([]);
   const [eventKind, setEventKind] = useState("");
   const [daily, setDaily] = useState<DailyRow[]>([]);
+  const [econ, setEcon] = useState<Economy | null>(null);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<{ id: number; name: string; age: number; activity: string | null }[]>([]);
 
@@ -58,6 +60,7 @@ export default function App() {
   usePoll(() => personId !== null && api.network(personId).then(setNet, () => setNet(null)), 15000, [personId]);
   usePoll(() => buildingId !== null && api.building(buildingId).then(setBuilding, () => undefined), 1500, [buildingId]);
   usePoll(() => tab === "records" && api.events(eventKind || undefined).then(setEvents, () => undefined), 2500, [tab, eventKind]);
+  usePoll(() => tab === "economy" && api.economy().then(setEcon, () => undefined), 2500, [tab]);
   usePoll(() => tab === "charts" && api.daily().then(setDaily, () => undefined), 4000, [tab]);
 
   useEffect(() => {
@@ -93,6 +96,13 @@ export default function App() {
         { label: "new acquaintances per day", color: "#d4508a", values: daily.map((d) => d.new_friendships) },
       ],
       ties: [{ label: "social ties", color: "#8a5cc4", values: daily.map((d) => d.ties) }],
+      money: [
+        { label: "median bank balance", color: "#3a9a55", values: daily.map((d) => d.median_balance) },
+      ],
+      budget: [
+        { label: "city budget", color: "#2f7fb0", values: daily.map((d) => d.city) },
+        { label: "loans outstanding", color: "#d9480f", values: daily.map((d) => d.loans_outstanding) },
+      ],
     };
   }, [daily]);
 
@@ -145,9 +155,9 @@ export default function App() {
         </section>
         <aside>
           <nav className="tabs">
-            {(["city", "person", "place", "records", "charts"] as Tab[]).map((t) => (
+            {(["city", "person", "place", "economy", "records", "charts"] as Tab[]).map((t) => (
               <button key={t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>
-                {t === "city" ? "City" : t === "person" ? "Person" : t === "place" ? "Place" : t === "records" ? "Records" : "Charts"}
+                {t[0].toUpperCase() + t.slice(1)}
               </button>
             ))}
           </nav>
@@ -182,6 +192,7 @@ export default function App() {
           )}
           {tab === "person" && (person ? <PersonPanel card={person} net={net && net.center === person.id ? net : null} onPick={pickPerson} /> : <div className="card muted">Click a person on the map.</div>)}
           {tab === "place" && (building ? <BuildingPanel card={building} onPick={pickPerson} /> : <div className="card muted">Click a building on the map.</div>)}
+          {tab === "economy" && (econ ? <EconomyPanel econ={econ} onPickBuilding={pickBuilding} /> : <div className="card muted">Loading the books...</div>)}
           {tab === "records" && (
             <div className="card">
               <h2>City records</h2>
@@ -197,6 +208,9 @@ export default function App() {
                 <option value="graduated">Graduations</option>
                 <option value="retired">Retirements</option>
                 <option value="arrived">Arrivals</option>
+                <option value="loan">Loans</option>
+                <option value="laid_off">Lay-offs</option>
+                <option value="default">Defaults</option>
                 <option value="left">Departures</option>
                 <option value="day_summary">Daily reports</option>
               </select>
@@ -221,6 +235,9 @@ export default function App() {
               <LineChart days={chart.days} series={chart.people} />
               <h2>Births, deaths and migration per day</h2>
               <LineChart days={chart.days} series={chart.life} height={130} />
+              <h2>Money</h2>
+              <LineChart days={chart.days} series={chart.money} height={120} />
+              <LineChart days={chart.days} series={chart.budget} height={130} />
               <h2>Social graph</h2>
               <LineChart days={chart.days} series={chart.ties} />
               <LineChart days={chart.days} series={chart.social} height={120} />

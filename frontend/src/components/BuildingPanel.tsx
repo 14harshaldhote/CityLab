@@ -1,4 +1,5 @@
 import type { BuildingCard } from "../api/types";
+import { fmt } from "./PersonPanel";
 
 export default function BuildingPanel({ card, onPick }: { card: BuildingCard; onPick: (id: number) => void }) {
   return (
@@ -13,6 +14,15 @@ export default function BuildingPanel({ card, onPick }: { card: BuildingCard; on
         {card.pupils > 0 && `${card.pupils} pupils. `}
         {card.inside_count} people inside right now.
       </p>
+      {card.company && (
+        <p>
+          {card.company.public
+            ? "A public service, paid for by the city budget."
+            : card.company.funded_by
+              ? `Run by City Bank (reserves ${fmt(card.company.balance ?? 0)}).`
+              : `Company account ${fmt(card.company.balance ?? 0)}${card.company.debt ? `, owes ${fmt(card.company.debt)}` : ""}, credit score ${card.company.credit_score}.`}
+        </p>
+      )}
       <div className="people">
         {card.inside.map((p) => (
           <button key={p.id} className="link" onClick={() => onPick(p.id)}>

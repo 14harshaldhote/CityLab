@@ -219,6 +219,10 @@ aside {
   flex-wrap: wrap;
 }
 
+.tabs button {
+  padding: 5px 8px;
+}
+
 .card {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -358,4 +362,29 @@ aside {
   padding: 8px 12px;
   border-radius: 8px;
   margin-bottom: 8px;
+}
+
+.warn {
+  color: #b5461a;
+}
+
+.legend-list.one {
+  columns: 1;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.table td {
+  padding: 2px 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
