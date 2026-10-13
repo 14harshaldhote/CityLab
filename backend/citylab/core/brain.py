@@ -208,7 +208,7 @@ class Brain:
             return
         w = self.w
         src = w.city.buildings[p.place if p.place is not None else w.households[p.household].home]
-        trip = w.router.trip(src, w.city.buildings[place], t, w.households[p.household].has_car)
+        trip = w.transport.plan(p, src, w.city.buildings[place], t, activity if activity in (WORK, SCHOOL) else None)
         p.trip = trip
         p.pending = Plan(activity, place, until)
         p.activity = TRAVEL
@@ -225,6 +225,8 @@ class Brain:
         econ = self.w.economy
         if activity == WORK:
             econ.attendance[place].append(p.id)
+            if t > p.last_shift + 5 and p.last_shift >= 0 and p.trip is None and p.job is not None and p.job.building == place:
+                self.w.transport.late_for_work()
         elif activity == EAT_OUT:
             econ.purchase(p, place, econ.meal_price(), "meals out")
         elif activity == SHOP:

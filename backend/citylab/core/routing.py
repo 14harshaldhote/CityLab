@@ -15,37 +15,71 @@ import networkx as nx
 from .citygen import Building, City
 
 WALK_M_PER_MIN = 80.0
-CAR_M_PER_MIN = 420.0  # ~25 km/h average in town; traffic arrives in a later stage
+CAR_M_PER_MIN = 420.0  # ~25 km/h in town with no traffic (see transport.py for jams)
 CAR_MIN_DISTANCE_M = 1200.0
+
+# how someone moves along each piece of a trip
+WALK, CAR, BUS, AUTO, WAIT = 1, 2, 3, 4, 5
+LEG_NAMES = {0: "", WALK: "walking", CAR: "driving", BUS: "on a bus", AUTO: "in an auto", WAIT: "waiting"}
 
 
 @dataclass(slots=True)
 class Trip:
+    """A planned journey: a polyline with the minute the traveller reaches each point."""
+
     depart: int
     arrive: int
     points: list[tuple[float, float]]
-    cumulative: list[float]  # metres along the route at each point
-    mode: str  # "walk" | "car"
+    times: list[float]  # absolute minute at each point, never decreasing
+    legs: list[int]  # how they move along each segment (WALK, CAR, BUS, AUTO, WAIT)
+    mode: str  # "walk" | "car" | "bus" | "auto"
+    line: str | None = None  # bus route number
+    run: object | None = None  # the bus they ride
+    stop: str | None = None  # the stop they get on at
+    fare: float = 0.0
 
-    def position(self, t: int) -> tuple[float, float]:
-        if t <= self.depart:
-            return self.points[0]
-        if t >= self.arrive:
-            return self.points[-1]
-        total = self.cumulative[-1]
-        d = total * (t - self.depart) / (self.arrive - self.depart)
-        # binary search the segment
-        lo, hi = 0, len(self.cumulative) - 1
+    @property
+    def cumulative(self) -> list[float]:
+        out = [0.0]
+        for (x0, y0), (x1, y1) in zip(self.points, self.points[1:]):
+            out.append(out[-1] + math.hypot(x1 - x0, y1 - y0))
+        return out
+
+    def _seg(self, t: float) -> int:
+        lo, hi = 0, len(self.times) - 1
         while hi - lo > 1:
             mid = (lo + hi) // 2
-            if self.cumulative[mid] <= d:
+            if self.times[mid] <= t:
                 lo = mid
             else:
                 hi = mid
-        seg = self.cumulative[hi] - self.cumulative[lo]
-        f = 0.0 if seg <= 0 else (d - self.cumulative[lo]) / seg
-        (x0, y0), (x1, y1) = self.points[lo], self.points[hi]
+        return lo
+
+    def position(self, t: float) -> tuple[float, float]:
+        if t <= self.times[0]:
+            return self.points[0]
+        if t >= self.times[-1]:
+            return self.points[-1]
+        lo = self._seg(t)
+        span = self.times[lo + 1] - self.times[lo]
+        f = 1.0 if span <= 0 else (t - self.times[lo]) / span
+        (x0, y0), (x1, y1) = self.points[lo], self.points[lo + 1]
         return x0 + (x1 - x0) * f, y0 + (y1 - y0) * f
+
+    def leg(self, t: float) -> int:
+        if not self.legs:
+            return WALK
+        if t >= self.times[-1]:
+            return self.legs[-1]
+        return self.legs[min(len(self.legs) - 1, self._seg(t))]
+
+
+def timed(points: list[tuple[float, float]], depart: float, speed: float) -> list[float]:
+    """Times at each point when moving at a steady speed (metres per minute)."""
+    out = [float(depart)]
+    for (x0, y0), (x1, y1) in zip(points, points[1:]):
+        out.append(out[-1] + math.hypot(x1 - x0, y1 - y0) / speed)
+    return out
 
 
 class Router:
@@ -75,19 +109,24 @@ class Router:
         _, length = self._path(src.node, dst.node)
         return length + _access(self.city, src) + _access(self.city, dst)
 
-    def trip(self, src: Building, dst: Building, depart: int, has_car: bool) -> Trip:
+    def points(self, src: Building, dst: Building) -> tuple[list[tuple[float, float]], tuple[int, ...]]:
         nodes, _ = self._path(src.node, dst.node)
         pts = [(src.x + src.w / 2, src.y + src.h / 2)]
         pts += [self.city.node_xy(n) for n in nodes]
         pts.append((dst.x + dst.w / 2, dst.y + dst.h / 2))
-        cum = [0.0]
-        for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
-            cum.append(cum[-1] + math.hypot(x1 - x0, y1 - y0))
-        dist = cum[-1]
-        mode = "car" if has_car and dist >= CAR_MIN_DISTANCE_M else "walk"
-        speed = CAR_M_PER_MIN if mode == "car" else WALK_M_PER_MIN
-        minutes = max(1, math.ceil(dist / speed) + (4 if mode == "car" else 0))  # parking
-        return Trip(depart=depart, arrive=depart + minutes, points=pts, cumulative=cum, mode=mode)
+        return pts, nodes
+
+    def trip(self, src: Building, dst: Building, depart: int, has_car: bool) -> Trip:
+        """A trip on empty streets: on foot, or by car when it is far enough to bother."""
+        pts, _ = self.points(src, dst)
+        times = timed(pts, depart, WALK_M_PER_MIN)
+        mode = "car" if has_car and times[-1] - depart >= CAR_MIN_DISTANCE_M / WALK_M_PER_MIN else "walk"
+        if mode == "car":
+            times = timed(pts, depart, CAR_M_PER_MIN)
+            times.append(times[-1] + 4)  # parking
+            pts = pts + [pts[-1]]
+        legs = [CAR if mode == "car" else WALK] * (len(pts) - 1)
+        return Trip(depart=depart, arrive=max(depart + 1, math.ceil(times[-1])), points=pts, times=times, legs=legs, mode=mode)
 
 
 def _access(city: City, b: Building) -> float:

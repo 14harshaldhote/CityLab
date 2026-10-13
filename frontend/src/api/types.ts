@@ -32,8 +32,28 @@ export interface Plot {
   district: string;
 }
 
+export interface BusLine {
+  number: string;
+  name: string;
+  color: string;
+  nodes: number[];
+  stops: number[];
+}
+
+export interface BusStop {
+  id: number;
+  name: string;
+  x: number;
+  y: number;
+  node: number;
+  lines: string[];
+}
+
 export interface CityMap {
   name: string;
+  transit?: { lines: BusLine[]; stops: BusStop[] };
+  wide?: [number, number][];
+  widening?: [number, number][];
   version?: number;
   plots?: Plot[];
   roadworks?: { x: number; y: number; w: number; h: number }[];
@@ -67,7 +87,9 @@ export interface Frame {
   activity: number[];
   age: number[];
   place: number[];
-  car?: number[];
+  move?: number[]; // 0 not travelling, 1 walking, 2 driving, 3 on a bus, 4 in an auto, 5 waiting
+  buses?: [number, number, number, number, number, number][]; // id, x, y, heading, route, riders
+  traffic?: [number, number, number][]; // corner, corner, how full (1 = jammed)
   city_version?: number;
   sites?: [number, number][];
   counts: Record<string, number>;
@@ -141,6 +163,7 @@ export interface PersonCard {
   activity: string;
   place: string | null;
   heading_to: string | null;
+  travel?: string | null;
   until: string | null;
   friends: { id: number; name: string; strength: number }[];
   friend_count: number;
@@ -162,7 +185,7 @@ export interface Agencies {
   day: number;
   departments: { key: string; name: string; sector: "government" | "private"; does: string; watching: string; head: { id: number; name: string } | null; spent: number; done: number }[];
   projects: { building: number; name: string; kind: string; district: string; owner: string; progress: number; started_day: number; days_left: number; crew: number; crew_needed: number; why: string }[];
-  roadworks: { district: string; zone: string; progress: number; why: string }[];
+  roadworks: { district?: string; zone?: string; street?: string; progress: number; why: string }[];
   plots: Record<string, number>;
   finished: { building: number; name: string; kind: string; owner: string; day: number; district: string }[];
 }
@@ -215,4 +238,22 @@ export interface DailyRow {
   gdp: number;
   tax: number;
   in_debt: number;
+  trips_walk?: number;
+  trips_car?: number;
+  trips_bus?: number;
+  trips_auto?: number;
+  commute_min?: number;
+  late?: number;
+  bus_riders?: number;
+  worst_jam_kmh?: number | null;
+}
+
+export interface Transport {
+  now: { walking: number; driving: number; on_buses: number; in_autos: number; waiting: number; buses: number };
+  jams: { street: string; ratio: number; speed_kmh: number }[];
+  lines: { number: string; name: string; color: string; stops: number; km: number; buses_now: number; riders_now: number; riders_today: number; every: number | null }[];
+  today: { trips: Record<string, number>; commute_min: number; late: number; fares: number; bus_km: number };
+  history: DailyRow[];
+  fares: { bus: number; auto_min: number; auto_per_km: number; petrol_per_km: number };
+  widened: string[];
 }

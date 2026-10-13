@@ -33,7 +33,13 @@ export default function AgenciesPanel({ data, onPickPerson, onPickBuilding }: { 
           {data.roadworks.map((r, k) => (
             <li key={`r${k}`}>
               <div>
-                <b>New streets in {r.district}</b> <small>for a {r.zone} block</small>
+                {r.street ? (
+                  <b>Widening {r.street}</b>
+                ) : (
+                  <>
+                    <b>New streets in {r.district}</b> <small>for a {r.zone} block</small>
+                  </>
+                )}
                 <div className="bar">
                   <i style={{ width: `${Math.round(r.progress * 100)}%` }} />
                 </div>

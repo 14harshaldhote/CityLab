@@ -62,8 +62,8 @@ export default function PersonPanel({ card, net, onPick }: { card: PersonCard; n
       {card.alive && faithLine(card) && <p className="muted small">{faithLine(card)}</p>}
       {card.alive && (
         <p className="now">
-          Now <b>{card.activity}</b>
-          {card.place ? ` at ${card.place}` : card.heading_to ? ` to ${card.heading_to}` : ""}
+          Now <b>{card.travel ? card.travel[0].toLowerCase() + card.travel.slice(1) : card.activity}</b>
+          {card.place ? ` at ${card.place}` : card.heading_to ? `, going to ${card.heading_to}` : ""}
           {card.until ? ` until ${card.until.slice(-5)}` : ""}
         </p>
       )}

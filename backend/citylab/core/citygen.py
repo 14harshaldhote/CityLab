@@ -150,6 +150,7 @@ class City:
     zones: dict[tuple[int, int], str] = field(default_factory=dict)  # zone of every developed block
     plots: list[Plot] = field(default_factory=list)  # zoned, empty lots waiting for a project
     roadworks: list[tuple[int, int]] = field(default_factory=list)  # blocks whose streets are being laid
+    widening: list[tuple[int, int]] = field(default_factory=list)  # streets (corner, corner) being widened
     version: int = 0  # goes up whenever streets or buildings change
     def node_xy(self, node: int) -> tuple[float, float]:
         d = self.graph.nodes[node]
@@ -170,6 +171,8 @@ class City:
             "version": self.version,
             "plots": [p.to_dict() for p in self.plots],
             "roadworks": [self.block_rect(i, j) for i, j in self.roadworks],
+            "wide": [[int(a), int(b)] for a, b, d in self.graph.edges(data=True) if d.get("lanes", 1) > 1],
+            "widening": [[int(a), int(b)] for a, b in self.widening],
         }
 
     def block_rect(self, i: int, j: int) -> dict:

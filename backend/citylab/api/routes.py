@@ -41,6 +41,7 @@ def city(request: Request) -> dict[str, Any]:
     r = runner(request)
     with r.lock:
         out = r.world.city.to_dict()
+        out["transit"] = r.world.transport.network()
     out["activities"] = list(ACTIVITY_NAMES)
     return out
 
@@ -50,6 +51,13 @@ def agencies(request: Request) -> dict[str, Any]:
     r = runner(request)
     with r.lock:
         return r.world.government.view()
+
+
+@router.get("/transport")
+def transport(request: Request) -> dict[str, Any]:
+    r = runner(request)
+    with r.lock:
+        return r.world.transport.view()
 
 
 @router.get("/frame")

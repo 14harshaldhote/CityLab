@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { CityMap as City, Frame } from "../api/types";
 import { daylight, hash01 } from "../engine/art";
-import { buildingModel, outskirtsModel, plotModel, siteHeight, streetModel, type Part, type Shape, type Win } from "../engine/models";
+import { buildingModel, outskirtsModel, plotModel, siteHeight, streetModel, transitModel, type Part, type Shape, type Win } from "../engine/models";
 import { skyAt } from "../engine/sky";
 import { lerpFrames } from "../engine/view";
 
@@ -21,6 +21,16 @@ const SLEEPING = 0;
 const SKIN = [0x8d5524, 0xa86b3c, 0xc68642, 0xb07a4f, 0x7a4a2a, 0xd29a6a];
 const SHIRTS = [0xe3672f, 0x2c7fb8, 0xd9467f, 0x2f9a52, 0xe7b53b, 0x8a4fc6, 0x149c8f, 0xf2f2f2, 0xd2463c, 0x5b6c9e];
 const CAR_COLORS = [0xf2f2f2, 0xd2463c, 0x3f63a5, 0x2d2d2d, 0xe7b53b, 0x9aa3ad, 0x3f8f6a];
+// how each traveller is moving (see the server's routing.py)
+const DRIVING = 2;
+const ON_BUS = 3;
+const IN_AUTO = 4;
+const WAITING = 5;
+const JAM = [
+  [0.9, 0xf2b32a],
+  [1.2, 0xe0602f],
+  [1.6, 0xb3261e],
+] as const;
 
 /** One unit-sized shape per part kind, with its origin at the middle of its base. */
 function shapes(): Record<Shape, THREE.BufferGeometry> {
@@ -75,6 +85,9 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
   picks.current = { onPickPerson, onPickBuilding };
   const api = useRef<{ reset: () => void; follow: (on: boolean) => void } | null>(null);
   const [following, setFollowing] = useState(false);
+  const [traffic, setTraffic] = useState(true);
+  const showTraffic = useRef(traffic);
+  showTraffic.current = traffic;
   const saved = useRef<{ pos: THREE.Vector3; target: THREE.Vector3 } | null>(null); // keep the view when the city grows
 
   useEffect(() => {
@@ -147,7 +160,7 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
       windows.push(...m.windows);
     }
     const streets = streetModel(city);
-    parts.push(...streets.parts, ...outskirtsModel(city), ...plotModel(city));
+    parts.push(...streets.parts, ...outskirtsModel(city), ...plotModel(city), ...transitModel(city));
 
     const pickable: THREE.InstancedMesh[] = [];
     const meshBids = new Map<THREE.InstancedMesh, Int32Array>();
@@ -210,6 +223,65 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
     }
     for (let i = 0; i < MAX; i++) carTop.setColorAt(i, col.setHex(0x5b7590));
 
+    // auto-rickshaws: green below, a yellow canopy on top
+    const autoBody = new THREE.InstancedMesh(new THREE.BoxGeometry(2.6, 1.0, 1.5).translate(0.1, 0.75, 0), solid, 2000);
+    const autoTop = new THREE.InstancedMesh(new THREE.BoxGeometry(2.1, 1.0, 1.55).translate(-0.15, 1.75, 0), solid, 2000);
+    // city buses: a long body in the route's colour, a band of windows and a white roof
+    const BUSES = 300;
+    const busBody = new THREE.InstancedMesh(new THREE.BoxGeometry(12, 2.8, 3).translate(0, 1.9, 0), solid, BUSES);
+    const busWin = new THREE.InstancedMesh(new THREE.BoxGeometry(10.6, 1.0, 3.08).translate(0.4, 2.55, 0), solid, BUSES);
+    const busRoof = new THREE.InstancedMesh(new THREE.BoxGeometry(11.6, 0.35, 2.8).translate(0, 3.45, 0), solid, BUSES);
+    for (const m of [autoBody, autoTop, busBody, busWin, busRoof]) {
+      m.castShadow = true;
+      m.frustumCulled = false;
+      m.count = 0;
+      m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      scene.add(m);
+    }
+    for (let i = 0; i < 2000; i++) {
+      autoBody.setColorAt(i, col.setHex(0x2f8f4a));
+      autoTop.setColorAt(i, col.setHex(0xf2c12e));
+    }
+    for (let i = 0; i < BUSES; i++) {
+      busWin.setColorAt(i, col.setHex(0x2b3a4a));
+      busRoof.setColorAt(i, col.setHex(0xf4f1e8));
+    }
+    const lineColor = new Map((city.transit?.lines ?? []).map((l) => [Number(l.number), parseInt(l.color.slice(1), 16)]));
+    const lineName = new Map((city.transit?.lines ?? []).map((l) => [Number(l.number), l.name]));
+    let busInfo: { route: number; riders: number }[] = [];
+
+    // traffic: streets glow amber when busy and red when jammed
+    const nodeAt = new Map(city.nodes.map((nd) => [nd.id, nd]));
+    const wideSet = new Set((city.wide ?? []).map(([a, b]) => (a < b ? `${a}-${b}` : `${b}-${a}`)));
+    const jam = new THREE.InstancedMesh(
+      new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0),
+      new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.45, depthWrite: false }),
+      Math.max(1, city.edges.length),
+    );
+    jam.count = 0;
+    jam.frustumCulled = false;
+    jam.renderOrder = 2;
+    scene.add(jam);
+    const paintTraffic = (frame: Frame) => {
+      let k = 0;
+      if (showTraffic.current) {
+        for (const [a, b, r] of frame.traffic ?? []) {
+          if (r < JAM[0][0]) continue;
+          const na = nodeAt.get(a);
+          const nb = nodeAt.get(b);
+          if (!na || !nb) continue;
+          const len = Math.hypot(nb.x - na.x, nb.y - na.y);
+          const wide = wideSet.has(`${a}-${b}`);
+          place(jam, k, (na.x + nb.x) / 2, 0.4, (na.y + nb.y) / 2, len - 22, 0.12, wide ? 27 : 17, Math.atan2(-(nb.y - na.y), nb.x - na.x));
+          jam.setColorAt(k, col.setHex(JAM.filter(([at]) => r >= at).pop()![1]));
+          k++;
+        }
+      }
+      jam.count = k;
+      jam.instanceMatrix.needsUpdate = true;
+      if (jam.instanceColor) jam.instanceColor.needsUpdate = true;
+    };
+
     // building sites: the structure rises day by day inside its bamboo scaffolding
     const sites = city.buildings.filter((b) => b.status === "construction");
     const siteCore = new THREE.InstancedMesh(geo.box, solid, Math.max(1, sites.length));
@@ -252,6 +324,7 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
     const prevPos = new Map<number, [number, number]>();
     let shown: number[] = []; // body instance -> person id
     let lastT = -1;
+    let painted = "";
     let lastNight = -1;
     let follow = false;
     const awake = new Map<number, number>();
@@ -305,6 +378,11 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
       const f = Math.min(1, (performance.now() - at) / TICK_MS);
       lerpFrames(prev ?? next, next, prev ? f : 1, pos);
 
+      const paintKey = `${next.t}:${showTraffic.current}`;
+      if (paintKey !== painted) {
+        painted = paintKey;
+        paintTraffic(next);
+      }
       if (next.t !== lastT) {
         lastT = next.t;
         const night = sky(next);
@@ -332,6 +410,7 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
       const time = performance.now() / 1000;
       let nb = 0;
       let nc = 0;
+      let na = 0;
       shown = [];
       for (let i = 0; i < n; i++) {
         const pl = next.place?.[i] ?? -1;
@@ -342,12 +421,22 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
         const hx = Math.cos(h);
         const hz = Math.sin(h);
         // keep to the left, as traffic does in India: cars in the left lane, walkers on the pavement
-        const driving = pl < 0 && next.car?.[i] === 1;
-        const side = pl < 0 ? (driving ? 5 : 13) : 0;
+        const move = pl < 0 ? (next.move?.[i] ?? 1) : 0;
+        if (move === ON_BUS) {
+          prevPos.set(id, [pos.x[i], pos.y[i]]);
+          continue; // inside the bus
+        }
+        const driving = move === DRIVING;
+        const side = pl < 0 ? (driving || move === IN_AUTO ? 5 : 13) : 0;
         const x = pos.x[i] + hz * side;
         const z = pos.y[i] - hx * side;
         prevPos.set(id, [x, z]);
-        if (driving) {
+        if (move === IN_AUTO) {
+          const cs = Math.max(1.2, S * 0.55);
+          place(autoBody, na, x, 0.3, z, cs, cs, cs, -h);
+          place(autoTop, na, x, 0.3, z, cs, cs, cs, -h);
+          na++;
+        } else if (driving) {
           const cs = Math.max(1.2, S * 0.55);
           place(carBody, nc, x, 0.3, z, cs, cs, cs, -h);
           place(carTop, nc, x, 0.3, z, cs, cs, cs, -h);
@@ -356,7 +445,7 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
         } else {
           const child = next.age[i] < 13 ? 0.7 : 1;
           const s = S * child;
-          const bob = pl < 0 ? Math.abs(Math.sin(time * 9 + id)) * 0.35 * s : 0;
+          const bob = pl < 0 && move !== WAITING ? Math.abs(Math.sin(time * 9 + id)) * 0.35 * s : 0;
           place(bodies, nb, x, bob, z, s, s, s, -h);
           place(heads, nb, x, bob, z, s, s, s, -h);
           // out and about, everyone wears their own colours (the flat map colours them by activity)
@@ -368,7 +457,31 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
       }
       bodies.count = heads.count = nb;
       carBody.count = carTop.count = nc;
-      for (const m of [bodies, heads, carBody, carTop]) {
+      autoBody.count = autoTop.count = na;
+
+      // buses glide between server frames like everyone else
+      const was = new Map((prev?.buses ?? []).map((b) => [b[0], b]));
+      const bs = Math.max(1.5, Math.min(S * 0.75, 3.6));
+      busInfo = [];
+      const list = next.buses ?? [];
+      for (let k = 0; k < list.length && k < BUSES; k++) {
+        const [id, bx, by, hd, route, riders] = list[k];
+        const o = was.get(id);
+        const x0 = o && prev ? o[1] + (bx - o[1]) * f : bx;
+        const y0 = o && prev ? o[2] + (by - o[2]) * f : by;
+        const hx = Math.cos(hd);
+        const hz = Math.sin(hd);
+        const x = x0 + hz * 5;
+        const z = y0 - hx * 5;
+        place(busBody, k, x, 0.3, z, bs, bs, bs, -hd);
+        place(busWin, k, x, 0.3, z, bs, bs, bs, -hd);
+        place(busRoof, k, x, 0.3, z, bs, bs, bs, -hd);
+        busBody.setColorAt(k, col.setHex(lineColor.get(route) ?? 0xd2463c));
+        busInfo.push({ route, riders });
+      }
+      busBody.count = busWin.count = busRoof.count = Math.min(list.length, BUSES);
+      busBody.computeBoundingSphere();
+      for (const m of [bodies, heads, carBody, carTop, autoBody, autoTop, busBody, busWin, busRoof]) {
         m.instanceMatrix.needsUpdate = true;
         if (m.instanceColor) m.instanceColor.needsUpdate = true;
       }
@@ -406,10 +519,12 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
       ndc.set(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
       ray.setFromCamera(ndc, camera);
       const person = ray.intersectObject(bodies, false)[0];
+      const bus = ray.intersectObject(busBody, false)[0];
+      if (bus && bus.instanceId !== undefined && (!person || bus.distance < person.distance)) return { bus: busInfo[bus.instanceId] };
       const thing = ray.intersectObjects(pickable, false).find((h) => h.instanceId !== undefined && meshBids.get(h.object as THREE.InstancedMesh)![h.instanceId!] >= 0);
       if (person && person.instanceId !== undefined && (!thing || person.distance <= thing.distance + 20)) return { person: shown[person.instanceId] };
       if (thing) return { building: meshBids.get(thing.object as THREE.InstancedMesh)![thing.instanceId!] };
-      return {};
+      return {} as { person?: number; building?: number; bus?: { route: number; riders: number } };
     };
     let down: { x: number; y: number } | null = null;
     const onDown = (e: PointerEvent) => {
@@ -429,7 +544,14 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
       lastHover = performance.now();
       const hit = cast(e.clientX, e.clientY);
       const r = el.getBoundingClientRect();
-      const text = hit.building !== undefined ? city.buildings[hit.building]?.name : hit.person !== undefined ? "Click to follow this person" : null;
+      const text =
+        hit.bus !== undefined
+          ? `Bus ${hit.bus.route}: ${lineName.get(hit.bus.route) ?? ""} · ${hit.bus.riders} on board`
+          : hit.building !== undefined
+            ? city.buildings[hit.building]?.name
+            : hit.person !== undefined
+              ? "Click to follow this person"
+              : null;
       setHover(text ? { x: e.clientX - r.left, y: e.clientY - r.top, text } : null);
     };
     const onLeave = () => setHover(null);
@@ -493,6 +615,9 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
       )}
       <div className="view-tools">
         <button onClick={() => api.current?.reset()}>Whole city</button>
+        <button className={traffic ? "on" : ""} onClick={() => setTraffic(!traffic)} title="Busy streets turn amber, jammed ones red">
+          Traffic
+        </button>
         {selectedPerson !== null && (
           <button
             className={following ? "on" : ""}

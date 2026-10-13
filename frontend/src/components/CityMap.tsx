@@ -52,7 +52,9 @@ export default function CityMap({ city, frames, selectedPerson, selectedBuilding
     const lamps = new Graphics();
     const people = new Graphics();
     const marks = new Graphics();
-    world.addChild(ground, shadows, buildings, tint, lit, lamps, people, marks);
+    const traffic = new Graphics();
+    const buses = new Graphics();
+    world.addChild(ground, traffic, shadows, buildings, tint, lit, lamps, people, buses, marks);
     lamps.blendMode = "add";
     lit.blendMode = "add";
 
@@ -63,6 +65,15 @@ export default function CityMap({ city, frames, selectedPerson, selectedBuilding
     let shownIds: number[] = [];
 
     drawGround(ground, city);
+    // bus stops: a green shelter with a dot for every route that stops there
+    const lineColor = new Map((city.transit?.lines ?? []).map((l) => [l.number, parseInt(l.color.slice(1), 16)]));
+    for (const st of city.transit?.stops ?? []) {
+      ground.roundRect(st.x - 26, st.y + 12, 14, 9, 2).fill(0x2f7d5b).stroke({ width: 1.2, color: 0xfffaf0 });
+      st.lines.forEach((n, k) => ground.circle(st.x - 23 + k * 4, st.y + 26, 1.8).fill(lineColor.get(n) ?? 0x3f63a5));
+    }
+    const nodeAt = new Map(city.nodes.map((nd) => [nd.id, nd]));
+    const busColor = new Map((city.transit?.lines ?? []).map((l) => [Number(l.number), parseInt(l.color.slice(1), 16)]));
+    let trafficT = -1;
     const order = [...city.buildings].sort((a, b) => a.y + a.h - (b.y + b.h) || a.x - b.x);
     const litBy = new Map<number, Graphics>();
     for (const b of order) {
@@ -173,11 +184,28 @@ export default function CityMap({ city, frames, selectedPerson, selectedBuilding
       }
       for (const [bid, g] of litBy) g.alpha = night > 0.25 ? Math.min(1, (awake.get(bid) ?? 0) / 3) * night : 0;
 
+      // busy streets amber, jammed streets red
+      if (next.t !== trafficT) {
+        trafficT = next.t;
+        traffic.clear();
+        for (const [a, b, ratio] of next.traffic ?? []) {
+          if (ratio < 0.9) continue;
+          const na = nodeAt.get(a);
+          const nb = nodeAt.get(b);
+          if (!na || !nb) continue;
+          traffic.moveTo(na.x, na.y).lineTo(nb.x, nb.y).stroke({ width: 16, color: ratio >= 1.6 ? 0xb3261e : ratio >= 1.2 ? 0xe0602f : 0xf2b32a, alpha: 0.8, cap: "round" });
+        }
+      }
+
       people.clear();
       const r = Math.max(3.4, 2.4 / world.scale.x);
       const outline = world.scale.x >= 1.1;
       for (let i = 0; i < n; i++) {
         const pl = next.place?.[i] ?? -1;
+        if (pl < 0 && next.move?.[i] === 3) {
+          drawnY[i] = -FAR; // riding inside a bus
+          continue;
+        }
         const z = pl >= 0 ? lift(pl) : 0;
         const x = pos.x[i];
         const y = pos.y[i] - z;
@@ -187,6 +215,21 @@ export default function CityMap({ city, frames, selectedPerson, selectedBuilding
         people.circle(x, y, size).fill(PEOPLE[next.activity[i]] ?? 0);
         // a paper-white rim only when zoomed in; zoomed out it would speckle the whole map
         if (outline) people.stroke({ width: 0.7 / world.scale.x, color: 0xfffaf0, alpha: 0.8 });
+      }
+
+      buses.clear();
+      const was = new Map((prev?.buses ?? []).map((b) => [b[0], b]));
+      const L = Math.max(24, 12 / world.scale.x);
+      const W = L * 0.36;
+      for (const [id, bx, by, hd, route] of next.buses ?? []) {
+        const o = was.get(id);
+        const x = (o && prev ? o[1] + (bx - o[1]) * f : bx) + Math.sin(hd) * 5;
+        const y = (o && prev ? o[2] + (by - o[2]) * f : by) - Math.cos(hd) * 5;
+        const ux = Math.cos(hd);
+        const uy = Math.sin(hd);
+        const corner = (a: number, b: number) => [x + ux * a - uy * b, y + uy * a + ux * b];
+        const body = [...corner(L / 2, W / 2), ...corner(L / 2, -W / 2), ...corner(-L / 2, -W / 2), ...corner(-L / 2, W / 2)];
+        buses.poly(body).fill(busColor.get(route) ?? 0xd2463c).stroke({ width: 1.5 / world.scale.x + 0.6, color: 0xfffaf0 });
       }
 
       marks.clear();

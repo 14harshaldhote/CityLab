@@ -65,6 +65,7 @@ def end_of_day(w: World) -> None:
     w.today.new_friendships += w.social.close_triads(w.streams("social"), [p.id for p in alive], {p.id: 0.04 * p.extraversion for p in alive})
     w.social.fade()
     w.visits = {}
+    traffic = w.transport.close_day()
     w.government.daily()  # departments and builders, before the books close (crews are paid with today's wages)
     money = w.economy.end_of_day()
 
@@ -88,6 +89,7 @@ def end_of_day(w: World) -> None:
     row = w.summary()
     row.update(asdict(w.today))
     row.update({k: v for k, v in money.items() if k != "flows"})
+    row.update(traffic)
     row["day"] = SimTime(t).day
     row["clustering"] = w.social.clustering() if SimTime(t).day % 7 == 0 else (w.daily[-1]["clustering"] if w.daily else 0.0)
     w.daily.append(row)

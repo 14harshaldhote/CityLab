@@ -515,6 +515,9 @@ export function streetModel(city: CityMap): { parts: Part[]; lamps: { x: number;
     const [i, j] = key.split(",").map(Number);
     parts.push({ s: "box", x: (i + 0.5) * sp, y: 0, z: (j + 0.5) * sp, w: sp - 20, h: 0.3, d: sp - 20, c: C.pavement, bid: -1, flat: true });
   }
+  const key = (a: number, b: number) => (a < b ? `${a}-${b}` : `${b}-${a}`);
+  const wide = new Set((city.wide ?? []).map(([a, b]) => key(a, b)));
+  const works = new Set((city.widening ?? []).map(([a, b]) => key(a, b)));
   city.edges.forEach(([a, b], k) => {
     const na = byId.get(a)!;
     const nb = byId.get(b)!;
@@ -522,11 +525,35 @@ export function streetModel(city: CityMap): { parts: Part[]; lamps: { x: number;
     const ry = Math.atan2(-(nb.y - na.y), nb.x - na.x); // along the street
     const mx = (na.x + nb.x) / 2;
     const mz = (na.y + nb.y) / 2;
-    parts.push({ s: "box", x: mx, y: 0, z: mz, w: len, h: 0.36, d: 20, ry, c: C.road, bid: -1, flat: true });
     const ux = (nb.x - na.x) / len;
     const uz = (nb.y - na.y) / len;
-    for (let d = 22; d < len - 22; d += 20) {
-      parts.push({ s: "box", x: na.x + ux * d, y: 0.36, z: na.y + uz * d, w: 8, h: 0.05, d: 0.7, ry, c: C.roadLine, bid: -1, flat: true });
+    const four = wide.has(key(a, b));
+    parts.push({ s: "box", x: mx, y: 0, z: mz, w: len, h: 0.36, d: four ? 30 : 20, ry, c: C.road, bid: -1, flat: true });
+    if (four) {
+      // a planted divider down the middle, and lane lines either side
+      parts.push({ s: "box", x: mx, y: 0.36, z: mz, w: len - 34, h: 0.5, d: 2, ry, c: C.concrete, bid: -1, flat: true });
+      parts.push({ s: "box", x: mx, y: 0.86, z: mz, w: len - 38, h: 0.3, d: 1.2, ry, c: C.grass, bid: -1, flat: true });
+      for (const off of [-7.5, 7.5]) {
+        for (let d = 22; d < len - 22; d += 20) {
+          parts.push({ s: "box", x: na.x + ux * d - uz * off, y: 0.36, z: na.y + uz * d + ux * off, w: 8, h: 0.05, d: 0.6, ry, c: C.roadLine, bid: -1, flat: true });
+        }
+      }
+    } else {
+      for (let d = 22; d < len - 22; d += 20) {
+        parts.push({ s: "box", x: na.x + ux * d, y: 0.36, z: na.y + uz * d, w: 8, h: 0.05, d: 0.7, ry, c: C.roadLine, bid: -1, flat: true });
+      }
+    }
+    if (works.has(key(a, b))) {
+      // being widened: dug-up verges, striped barriers and cones
+      for (const side of [-1, 1]) {
+        parts.push({ s: "box", x: mx - uz * side * 13, y: 0, z: mz + ux * side * 13, w: len - 24, h: 0.42, d: 7, ry, c: C.dirt, bid: -1, flat: true });
+        for (let d = 16; d < len - 16; d += 14) {
+          const x = na.x + ux * d - uz * side * 9.5;
+          const z = na.y + uz * d + ux * side * 9.5;
+          parts.push({ s: "cone", x, y: 0.36, z, w: 1.3, h: 2, d: 1.3, c: C.saffron, bid: -1 });
+          if (d % 28 === 2) parts.push({ s: "box", x: na.x + ux * (d + 7) - uz * side * 9.5, y: 0.8, z: na.y + uz * (d + 7) + ux * side * 9.5, w: 5, h: 0.8, d: 0.3, ry, c: C.white, bid: -1 });
+        }
+      }
     }
     // a zebra crossing at the start of every street
     for (let s = -4; s <= 4; s++) {
@@ -548,6 +575,31 @@ export function streetModel(city: CityMap): { parts: Part[]; lamps: { x: number;
     lamps.push({ x: lx, z: lz });
   }
   return { parts, lamps };
+}
+
+/**
+ * Bus stops: a green shelter with a bench and a tin roof on the pavement corner, and a
+ * pole carrying a small sign in the colour of every route that stops there.
+ */
+export function transitModel(city: CityMap): Part[] {
+  const parts: Part[] = [];
+  const colours = new Map((city.transit?.lines ?? []).map((l) => [l.number, parseInt(l.color.slice(1), 16)]));
+  const k = 1.5; // a little larger than life, so stops read from afar
+  for (const s of city.transit?.stops ?? []) {
+    const x = s.x - 22;
+    const z = s.y + 18;
+    const P = (sh: Shape, dx: number, y: number, dz: number, w: number, h: number, d: number, c: number, flat = false) =>
+      parts.push({ s: sh, x: x + dx * k, y: y * k, z: z + dz * k, w: w * k, h: h * k, d: d * k, c, bid: -1, flat });
+    P("box", 0, 0, 0, 10, 0.3, 5, C.paving, true);
+    P("box", 0, 0.3, 2, 8.6, 3, 0.3, 0x2f7d5b); // back panel
+    for (const dx of [-4, 4]) P("cyl", dx, 0.3, -1.8, 0.3, 3.2, 0.3, C.pole);
+    P("box", 0, 3.5, 0, 10, 0.35, 5, 0xc84b3a); // tin roof
+    P("box", 0, 0.9, 1.1, 6.5, 0.3, 1.1, C.wood); // bench
+    // the route sign
+    P("cyl", 6.5, 0.3, -2.2, 0.35, 5.4, 0.35, C.pole);
+    s.lines.forEach((n, i) => P("box", 6.5, 4.6 - i * 0.95, -2.2, 1.9, 0.8, 0.25, colours.get(n) ?? C.blue));
+  }
+  return parts;
 }
 
 /** Farmland and scrub on the empty land around the city: room to grow into. */

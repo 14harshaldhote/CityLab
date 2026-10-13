@@ -28,6 +28,7 @@ from .names import RELIGION_LABEL, family_name, first_name, pick_religion
 from .people import ACTIVITY_NAMES, SLEEP, TRAVEL, Household, Job, Person
 from .rng import Streams, stable_hash
 from .routing import Router
+from .transport import Transport
 from .social import SocialGraph
 from .weather import Weather
 
@@ -60,6 +61,7 @@ class World:
         self.economy = Economy(self)
         self._founded = False
         self.government = Government(self)
+        self.transport = Transport(self)
         self._populate(population)
         self.economy.found()
         self._founded = True
@@ -81,6 +83,7 @@ class World:
             t = self.t
             if t % MINUTES_PER_DAY == 0:
                 lifecycle.end_of_day(self)
+            self.transport.tick(t)
             while q and q[0][0] <= t:
                 until, pid = heapq.heappop(q)
                 p = self.people.get(pid)
@@ -334,11 +337,12 @@ class World:
 
     def frame(self) -> dict[str, Any]:
         alive = self.alive()
-        ids, xs, ys, acts, ages, places, cars = [], [], [], [], [], [], []
+        ids, xs, ys, acts, ages, places, moves = [], [], [], [], [], [], []
+        t = self.t
         for p in alive:
             x, y = self.position(p)
             ids.append(p.id)
-            cars.append(1 if p.activity == TRAVEL and p.trip is not None and p.trip.mode == "car" else 0)
+            moves.append(p.trip.leg(t) if p.activity == TRAVEL and p.trip is not None else 0)
             places.append(p.place if p.place is not None else -1)
             xs.append(round(x, 1))
             ys.append(round(y, 1))
@@ -357,7 +361,9 @@ class World:
             "activity": acts,
             "age": ages,
             "place": places,
-            "car": cars,
+            "move": moves,
+            "buses": self.transport.buses(t),
+            "traffic": self.transport.traffic(t),
             "city_version": self.city.version,
             "sites": [[b.id, round(b.progress, 3)] for b in self.city.buildings if b.status == "construction"],
             "counts": {ACTIVITY_NAMES[k]: acts.count(k) for k in range(len(ACTIVITY_NAMES))},
@@ -409,6 +415,7 @@ class World:
             "skill": round(p.skill, 2),
             "activity": ACTIVITY_NAMES[p.activity],
             "place": self.city.buildings[p.place].name if p.place is not None else None,
+            "travel": self.transport.describe(p, t) if p.alive and p.activity == TRAVEL else None,
             "heading_to": self.city.buildings[p.pending.place].name if p.pending else None,
             "until": SimTime(p.until).label() if p.alive else None,
             "friends": friends,

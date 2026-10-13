@@ -720,3 +720,114 @@ aside {
   padding-left: 8px;
   border-left: 3px solid var(--sage);
 }
+
+/* ---- roads and buses ---- */
+.moving {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.moving li {
+  padding: 4px 9px;
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  font-size: 13px;
+  background: var(--panel-2);
+}
+
+.modes {
+  display: flex;
+  height: 14px;
+  border-radius: 8px 4px 9px 5px;
+  overflow: hidden;
+  margin: 6px 0;
+  background: rgba(59, 47, 39, 0.12);
+}
+
+.modes i {
+  display: block;
+  height: 100%;
+}
+
+.modes-key {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 12px;
+}
+
+.modes-key i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  vertical-align: -1px;
+}
+
+.jams {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.jams li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  font-size: 13px;
+}
+
+.jam-bar {
+  grid-column: 1 / -1;
+  height: 7px;
+  border-radius: 5px;
+  background: rgba(59, 47, 39, 0.12);
+  overflow: hidden;
+}
+
+.jam-bar i {
+  display: block;
+  height: 100%;
+}
+
+.lines {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.lines li {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 10px;
+  align-items: start;
+}
+
+.lines li div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.line-badge {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px 6px 10px 7px;
+  color: #fff;
+  font-weight: 700;
+  font-size: 16px;
+  box-shadow: 0 2px 0 rgba(59, 47, 39, 0.25);
+}

@@ -12,6 +12,8 @@ real municipal corporation does, with plain rules that can be read and printed
   grows, so routing changes) and builds public buildings such as schools.
 * **Education** asks for a new school when seats run short.
 * **Water Supply** charges every household a small water bill and pays to pump it.
+* **Municipal Transport** runs the city buses (see ``transport.py``), and when a
+  street jams day after day, PWD widens it to four lanes.
 * **Private builders** (developers, new companies and community trusts) take out a
   City Bank loan, hire a crew, and put up the building. A housing society is sold
   to the landlord when it is finished; a new company opens for business; a new
@@ -46,6 +48,9 @@ MATERIALS_PER_DAY = {"home": 900.0, "apartment": 1800.0, "office": 2600.0, "fact
                      "school": 1500.0, "park": 300.0}
 ROAD_DAYS = 12
 ROAD_COST_PER_DAY = 2500.0
+WIDEN_DAYS = 8
+WIDEN_COST_PER_DAY = 3000.0
+JAM_DAYS_TO_WIDEN = 4  # out of the last seven
 WATER_BILL = 2.0  # per person per day
 WATER_COST_SHARE = 0.6  # of the bill spent pumping and treating it
 SALE_MARGIN = 1.15  # a housing society sells for its cost plus this margin
@@ -92,11 +97,21 @@ class Roadwork:
 
 
 @dataclass
+class Widening:
+    edge: tuple[int, int]
+    street: str
+    started: int
+    progress: float = 0.0
+    why: str = ""
+
+
+@dataclass
 class Government:
     w: World
     departments: dict[str, Department] = field(default_factory=dict)
     projects: dict[int, Project] = field(default_factory=dict)
     roadworks: list[Roadwork] = field(default_factory=list)
+    widening: list[Widening] = field(default_factory=list)
     finished: list[dict[str, Any]] = field(default_factory=list)
 
     def __post_init__(self) -> None:
@@ -105,6 +120,7 @@ class Government:
             Department("pwd", "Public Works Department", "government", "Lays new streets and builds schools and parks."),
             Department("education", "Education Department", "government", "Makes sure every child has a school seat."),
             Department("water", "Water Supply Department", "government", "Supplies water to every home and bills for it."),
+            Department("transport", "Kamalnagar Municipal Transport", "government", "Runs the city buses and keeps an eye on traffic."),
             Department("builders", "Private builders", "private", "Developers who build housing societies, offices and shops."),
             Department("trusts", "Community trusts", "private", "Raise money to build new places of worship."),
         ):
@@ -117,8 +133,10 @@ class Government:
         rng = w.streams("agencies")
         self._heads()
         self._water()
+        self._transport()
         self._build(rng)
         self._roads()
+        self._widen()
         self._plan(rng)
 
     def _heads(self) -> None:
@@ -150,6 +168,20 @@ class Government:
         cost = econ.transfer("city", "outside", billed * WATER_COST_SHARE, "water supply")
         d.spent += cost
         d.watching = f"Billed {families} families {billed:,.0f} for water today."
+
+    def _transport(self) -> None:
+        tr = self.w.transport
+        d = self.departments["transport"]
+        if not tr.history:
+            return
+        y = tr.history[-1]
+        from .transport import DIESEL_PER_KM
+
+        d.spent += tr.last_bus_km * DIESEL_PER_KM
+        d.done = 0
+        jam = f" Slowest street: {y['worst_jam']}." if y.get("worst_jam") else ""
+        d.watching = (f"Buses carried {y['bus_riders']} passengers yesterday. The average trip to work or school took "
+                      f"{y['commute_min']:.0f} minutes and {y['late']} people were late for work.{jam}")
 
     # ---- construction ---------------------------------------------------------------------
 
@@ -261,6 +293,41 @@ class Government:
             if rw.progress >= 1.0:
                 self.roadworks.remove(rw)
                 self._open_block(rw)
+
+    def _widen(self) -> None:
+        """Streets that jam day after day get two more lanes. Traffic squeezes past the works meanwhile."""
+        w = self.w
+        g = w.city.graph
+        econ = w.economy
+        d = self.departments["pwd"]
+        for wd in list(self.widening):
+            d.spent += econ.transfer("city", "outside", WIDEN_COST_PER_DAY, "road widening")
+            wd.progress += 1.0 / WIDEN_DAYS
+            if wd.progress >= 1.0 - 1e-9:
+                self.widening.remove(wd)
+                if g.has_edge(*wd.edge):
+                    g.edges[wd.edge]["lanes"] = 2
+                    g.edges[wd.edge].pop("works", None)
+                if wd.edge in w.city.widening:
+                    w.city.widening.remove(wd.edge)
+                w.city.version += 1
+                d.done += 1
+                w.emit("roads", f"{wd.street} now has four lanes. The Public Works Department finished widening it in {WIDEN_DAYS} days.")
+        if self.widening or econ.balance["city"] < 150_000:
+            return
+        tr = w.transport
+        jams = sorted((-len(days), e) for e, days in tr.jam_days.items()
+                      if len(days) >= JAM_DAYS_TO_WIDEN and g.has_edge(*e) and g.edges[e].get("lanes", 1) == 1)
+        if not jams:
+            return
+        n, e = -jams[0][0], jams[0][1]
+        street = tr.street_place(*e)
+        why = f"it jammed on {n} of the last 7 days"
+        g.edges[e]["works"] = True
+        w.city.widening.append(e)
+        w.city.version += 1
+        self.widening.append(Widening(e, street, w.t // MINUTES_PER_DAY, why=why))
+        w.emit("roads", f"The Public Works Department started widening {street} because {why}. Expect delays.")
 
     def _open_block(self, rw: Roadwork) -> None:
         w = self.w
@@ -424,6 +491,7 @@ class Government:
                              "crew_needed": len(b.jobs), "why": pr.why})
         roads = [{"district": w.city.district_at(*rw.block), "zone": rw.zone, "progress": round(rw.progress, 3), "why": rw.why}
                  for rw in self.roadworks]
+        roads += [{"street": wd.street, "progress": round(wd.progress, 3), "why": wd.why} for wd in self.widening]
         return {
             "departments": [{"key": d.key, "name": d.name, "sector": d.sector, "does": d.does, "watching": d.watching, "head": head(d),
                              "spent": round(d.spent, 2), "done": d.done} for d in self.departments.values()],

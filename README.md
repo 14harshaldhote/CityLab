@@ -16,28 +16,34 @@ completely free and runs on your own computer.
 1. **Follow someone for a day.** Click any little person in the street, then press
    *Follow them*. You'll see their family, their job, their mood, their friends
    and the story of their life so far.
-2. **Catch the morning rush.** Set the speed to *1 h/s* and watch around 8 o'clock
-   as people walk to school and drive to work. Everyone keeps to the left, as on
-   Indian roads.
-3. **Watch the lights come on.** Jump ahead to the evening. Windows light up where
+2. **Get stuck in the morning rush.** Around 8 o'clock on a weekday, people pour
+   out to work and school. Busy streets glow amber, jammed ones turn red, and the
+   *Roads* tab tells you which street is crawling and how many people were late
+   for work. Everyone keeps to the left, as on Indian roads.
+3. **Ride the bus.** Five colourful bus routes cross the city, with a shelter at
+   every stop. Hover over a bus to see how full it is, or follow someone who is
+   waiting at a stop and ride along with them. You'll spot green-and-yellow autos
+   too.
+4. **Watch the lights come on.** Jump ahead to the evening. Windows light up where
    families are awake, offices go dark, and street lamps glow.
-4. **Find Friday prayers and Sunday Mass.** Open the Records tab, or click a
+5. **Find Friday prayers and Sunday Mass.** Open the Records tab, or click a
    masjid on a Friday afternoon or the church on a Sunday morning, and see who's
    inside.
-5. **Wait for a festival.** Diwali, Eid, Christmas, Vaisakhi and more are on the
+6. **Wait for a festival.** Diwali, Eid, Christmas, Vaisakhi and more are on the
    city's calendar. On the day, the City tab tells you, and the places of worship
    fill up.
-6. **Check who's rich and who's struggling.** The Economy tab shows the bank, the
+7. **Check who's rich and who's struggling.** The Economy tab shows the bank, the
    city's budget and the companies doing best and worst.
-7. **Watch a family grow.** In Records, pick *Births* or *Couples*, then open the
+8. **Watch a family grow.** In Records, pick *Births* or *Couples*, then open the
    people involved and follow their family tree.
-8. **Watch the city grow.** Let it run for a few weeks. When homes start filling up,
+9. **Watch the city grow.** Let it run for a few weeks. When homes start filling up,
    the town planners mark out new land, road crews lay fresh streets, and builders
    put up fences and tower cranes. Open the *Agencies* tab to see every building
    site, who's paying for it and how many days are left. When a housing society
-   is finished, new families move in.
-9. **Switch to the flat map.** Press *Map* for a colourful, hand-drawn view where
-   every dot is a person, coloured by what they're doing.
+   is finished, new families move in. And if a street jams day after day, road
+   crews arrive with cones and widen it to four lanes.
+10. **Switch to the flat map.** Press *Map* for a colourful, hand-drawn view where
+    every dot is a person, coloured by what they're doing.
 
 ![Kamalnagar at night](docs/images/city-night.png)
 
@@ -59,6 +65,15 @@ These are the same ideas that power modern games and AI, in plain words.
 * **Life follows real patterns.** Birthdays, school, first jobs, weddings, babies
   and old age follow the curves real populations follow. Nobody scripts the
   population; it grows or shrinks on its own.
+* **Traffic jams happen on their own.** Nobody places them. Each street can only
+  take so many vehicles; when it is nearly full, everyone on it slows down
+  sharply. That's why a few extra cars at 9 o'clock turn a five-minute drive into
+  a crawl. Traffic engineers use the same rule to plan real roads.
+* **Everyone picks how to travel.** Short hops are walked and car owners drive.
+  Everyone else weighs walking, the bus and an auto by time and money. Waiting
+  feels longer than riding, walking in the rain feels much longer, and a fare
+  matters more to someone who earns less. That's how real cities end up with
+  their mix of buses, autos and footpaths.
 * **The city plans ahead.** The municipal corporation keeps an eye on how full
   the homes are, how many jobs are waiting and whether there are enough shops and
   school seats. When something runs short, it decides what to build next, a bit
@@ -88,11 +103,17 @@ These are the same ideas that power modern games and AI, in plain words.
   langar, a Buddha vihar, a Jain derasar and a Parsi agiary.
 * **Money:** wages, rent, groceries, water bills, taxes, pensions, savings,
   loans, and companies that grow or lay people off.
+* **Getting around:** five city bus routes, including a ring road around the
+  centre, with almost 50 stops, plus autos and cars. Streets are named the
+  Indian way, like M.G. Road, Tilak Road and Gandhi Marg.
 * **People who run the city:** a town planning office, a public works department
-  that lays roads, an education department, the water supply, and local builders
-  who borrow from City Bank to put up new homes and shops.
+  that lays and widens roads, the municipal bus service, an education department,
+  the water supply, and local builders who borrow from City Bank to put up new
+  homes and shops.
 
 ![New housing societies going up in Nadi Kinara](docs/images/city-growing.png)
+
+![The Friday morning rush: red streets are jammed](docs/images/city-rush-hour.png)
 
 ![Someone's life story](docs/images/person-card.png)
 
@@ -130,7 +151,6 @@ set `CITYLAB_POPULATION`.
 
 ## Coming soon
 
-* Traffic jams, buses and bus stops.
 * Crime, police patrols, CCTV cameras and courts.
 * A time machine to rewind the city and try "what if...?".
 * Chatting with the city: ask it anything about its people and history.
