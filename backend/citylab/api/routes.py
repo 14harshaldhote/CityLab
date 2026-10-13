@@ -103,6 +103,25 @@ def person(pid: int, request: Request) -> dict[str, Any]:
     return card
 
 
+@router.get("/people/{pid}/network")
+def network(pid: int, request: Request, limit: int = Query(25, ge=1, le=100)) -> dict[str, Any]:
+    """The person's corner of the social graph: their strongest ties and the ties among those people."""
+    r = runner(request)
+    with r.lock:
+        g = r.world.social.g
+        if pid not in g:
+            raise HTTPException(404, "no such living person")
+        nbrs = sorted(g[pid].items(), key=lambda kv: (-kv[1]["w"], kv[0]))[:limit]
+        keep = [pid] + [int(v) for v, _ in nbrs]
+        sub = g.subgraph(keep)
+        people = r.world.people
+        return {
+            "center": pid,
+            "nodes": [{"id": v, "name": people[v].name, "age": int(people[v].age(r.world.t))} for v in keep],
+            "links": [{"source": int(a), "target": int(b), "strength": round(d["w"], 2), "kind": d["kind"]} for a, b, d in sub.edges(data=True)],
+        }
+
+
 @router.get("/buildings/{bid}")
 def building(bid: int, request: Request) -> dict[str, Any]:
     r = runner(request)

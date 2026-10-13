@@ -3,6 +3,7 @@ import { api, liveFrames } from "./api/client";
 import type { BuildingCard, CityEvent, CityMap as City, DailyRow, Frame, PersonCard, Summary } from "./api/types";
 import BuildingPanel from "./components/BuildingPanel";
 import CityMap from "./components/CityMap";
+import type { Network } from "./components/EgoGraph";
 import LineChart from "./components/LineChart";
 import PersonPanel from "./components/PersonPanel";
 import TimeBar from "./components/TimeBar";
@@ -31,6 +32,7 @@ export default function App() {
   const [buildingId, setBuildingId] = useState<number | null>(null);
   const [person, setPerson] = useState<PersonCard | null>(null);
   const [building, setBuilding] = useState<BuildingCard | null>(null);
+  const [net, setNet] = useState<Network | null>(null);
   const [events, setEvents] = useState<CityEvent[]>([]);
   const [eventKind, setEventKind] = useState("");
   const [daily, setDaily] = useState<DailyRow[]>([]);
@@ -53,6 +55,7 @@ export default function App() {
 
   usePoll(() => api.summary().then(setSummary, () => undefined), 2000, []);
   usePoll(() => personId !== null && api.person(personId).then(setPerson, () => undefined), 1500, [personId]);
+  usePoll(() => personId !== null && api.network(personId).then(setNet, () => setNet(null)), 15000, [personId]);
   usePoll(() => buildingId !== null && api.building(buildingId).then(setBuilding, () => undefined), 1500, [buildingId]);
   usePoll(() => tab === "records" && api.events(eventKind || undefined).then(setEvents, () => undefined), 2500, [tab, eventKind]);
   usePoll(() => tab === "charts" && api.daily().then(setDaily, () => undefined), 4000, [tab]);
@@ -79,6 +82,12 @@ export default function App() {
       people: [
         { label: "population", color: "#2f7fb0", values: daily.map((d) => d.population) },
         { label: "employed", color: "#3a9a55", values: daily.map((d) => d.employed) },
+      ],
+      life: [
+        { label: "births", color: "#3a9a55", values: daily.map((d) => d.births) },
+        { label: "deaths", color: "#6c7a96", values: daily.map((d) => d.deaths) },
+        { label: "arrived", color: "#e2723b", values: daily.map((d) => d.arrived) },
+        { label: "left", color: "#c9b13a", values: daily.map((d) => d.left) },
       ],
       social: [
         { label: "new acquaintances per day", color: "#d4508a", values: daily.map((d) => d.new_friendships) },
@@ -171,7 +180,7 @@ export default function App() {
               <p className="muted small">Click any dot on the map to follow that person, or any building to see who is inside.</p>
             </div>
           )}
-          {tab === "person" && (person ? <PersonPanel card={person} onPick={pickPerson} /> : <div className="card muted">Click a person on the map.</div>)}
+          {tab === "person" && (person ? <PersonPanel card={person} net={net && net.center === person.id ? net : null} onPick={pickPerson} /> : <div className="card muted">Click a person on the map.</div>)}
           {tab === "place" && (building ? <BuildingPanel card={building} onPick={pickPerson} /> : <div className="card muted">Click a building on the map.</div>)}
           {tab === "records" && (
             <div className="card">
@@ -182,6 +191,11 @@ export default function App() {
                 <option value="death">Deaths</option>
                 <option value="couple">Couples</option>
                 <option value="hired">Hires</option>
+                <option value="moved">Moving in together</option>
+                <option value="moved_out">Leaving home</option>
+                <option value="school_start">Starting school</option>
+                <option value="graduated">Graduations</option>
+                <option value="retired">Retirements</option>
                 <option value="arrived">Arrivals</option>
                 <option value="left">Departures</option>
                 <option value="day_summary">Daily reports</option>
@@ -205,6 +219,8 @@ export default function App() {
             <div className="card">
               <h2>People</h2>
               <LineChart days={chart.days} series={chart.people} />
+              <h2>Births, deaths and migration per day</h2>
+              <LineChart days={chart.days} series={chart.life} height={130} />
               <h2>Social graph</h2>
               <LineChart days={chart.days} series={chart.ties} />
               <LineChart days={chart.days} series={chart.social} height={120} />

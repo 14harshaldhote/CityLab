@@ -18,8 +18,8 @@ come from there.
 |---|---|---|
 | 1 | Foundation: simulation clock, seeded randomness, event bus and log, weather and daylight, generated city with streets, routing, Postgres storage | done |
 | 2 | People and their day: needs, personality, schedules, utility AI, friendships from shared places, API and live map | done |
-| 3 | Life cycle and the social graph: ageing, couples, births, deaths, jobs, migration | next |
-| 4 | Economy and the bank | planned |
+| 3 | Life cycle and the social graph: ageing, couples, births, deaths, jobs, migration | done |
+| 4 | Economy and the bank | next |
 | 5 | Government agencies, zoning and new buildings | planned |
 | 6 | Roads, traffic and buses | planned |
 | 7 | Crime, police, CCTV and courts | planned |
@@ -48,6 +48,37 @@ cd frontend && npm install && npm run dev   # open http://localhost:5173
 Settings are environment variables: `CITYLAB_SEED`, `CITYLAB_POPULATION` (default
 2000), `CITYLAB_SPEED` (simulated minutes per real second, default 10),
 `CITYLAB_AUTOPLAY`, `CITYLAB_DATABASE_URL` (optional Postgres).
+
+## Stage 3: life, growth and the social graph
+
+Every simulated midnight (`core/lifecycle.py`) the city lives a little:
+
+* **Birthdays** move people through life: school at 6, graduation and job hunting
+  at 18, retirement at 65, a little more skill for every year of work.
+* **Deaths** follow the Gompertz law of mortality: yearly risk
+  `0.00003 * e^(0.09 * age)`, so it roughly doubles every 7.7 years, raised by poor
+  health. When someone dies their job and school place are freed, their partner is
+  widowed and they leave the social graph; the registry keeps their story.
+* **Couples** form between single adults who are already close in the social graph,
+  more likely the stronger the tie and the more alike their personalities. The one
+  with the smaller household moves in with the other, bringing their children.
+* **Births** come from couples: a fertility curve peaking near 29, lower with each
+  child they already have and in crowded homes. Babies join the family, take after
+  their parents' personality a little and are tied to parents and siblings in the
+  graph.
+* **Jobs**: people without work look for one of the nearest open jobs.
+* **Leaving home**: grown children with a job move out when a home is free.
+* **Migration**: when open jobs outnumber job seekers and homes are free, newcomers
+  arrive, often following a friend already here, picked in proportion to how
+  connected they are (preferential attachment). Households that stay unemployed
+  for months may leave.
+
+The social graph now grows and prunes itself: chance meetings at shared places,
+friends of friends, ties that fade unless kept up, and nobody keeping up with more
+than 40 people. Each person's card shows their corner of the graph (D3 force
+layout), their family and their life story from the records.
+
+![Charts of population, births, deaths and the social graph](docs/images/charts.png)
 
 ## Stage 2: people and their day
 
@@ -82,7 +113,7 @@ Settings are environment variables: `CITYLAB_SEED`, `CITYLAB_POPULATION` (defaul
   family, friends, life story) or a building to see who is inside. Night falls with
   the real sun angle and street lamps come on.
 
-On a laptop the city of 2,000 runs at roughly one simulated day per 1.3 seconds
+On a laptop the city of 2,000 runs at roughly one simulated day per 1.5 seconds
 (`python -m benchmarks.bench`).
 
 ## Stage 1: the foundation

@@ -21,6 +21,10 @@ def test_city_frame_and_people():
         card = c.get(f"/api/people/{pid}").json()
         assert card["name"] and "needs" in card and "personality" in card
         assert c.get("/api/people/999999").status_code == 404
+        net = c.get(f"/api/people/{pid}/network").json()
+        assert net["center"] == pid and net["nodes"][0]["id"] == pid
+        ids = {n["id"] for n in net["nodes"]}
+        assert all(l["source"] in ids and l["target"] in ids for l in net["links"])
         b = c.get(f"/api/buildings/{city['buildings'][0]['id']}").json()
         assert "inside_count" in b
 

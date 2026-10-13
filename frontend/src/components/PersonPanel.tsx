@@ -1,4 +1,5 @@
 import type { PersonCard, PersonRef } from "../api/types";
+import EgoGraph, { type Network } from "./EgoGraph";
 
 const TRAITS: [string, string][] = [
   ["openness", "Curious"],
@@ -30,7 +31,7 @@ function Who({ p, onPick }: { p: PersonRef | null; onPick: (id: number) => void 
   );
 }
 
-export default function PersonPanel({ card, onPick }: { card: PersonCard; onPick: (id: number) => void }) {
+export default function PersonPanel({ card, net, onPick }: { card: PersonCard; net: Network | null; onPick: (id: number) => void }) {
   return (
     <div className="card">
       <h2>{card.name}</h2>
@@ -116,6 +117,14 @@ export default function PersonPanel({ card, onPick }: { card: PersonCard; onPick
           </button>
         ))}
       </div>
+
+      {net && net.nodes.length > 1 && (
+        <>
+          <h3>Their corner of the social graph</h3>
+          <EgoGraph net={net} onPick={onPick} />
+          <p className="muted small">Pink: partner, blue: parents and children, purple: siblings, grey: friends. Thicker means closer.</p>
+        </>
+      )}
 
       <h3>Life story</h3>
       <ul className="events">

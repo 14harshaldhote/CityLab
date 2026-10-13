@@ -15,6 +15,7 @@ Friendships grow the way real social networks do:
 
 from __future__ import annotations
 
+import heapq
 from collections.abc import Iterable
 
 import networkx as nx
@@ -23,8 +24,10 @@ import numpy as np
 FAMILY_KINDS = ("partner", "parent", "child", "sibling")
 NEW_EDGE = 0.06
 MEET_GAIN = 0.035
-DAILY_FADE = 0.985
+DAILY_FADE = 0.99
+WEAK_FADE = 0.96
 FORGET_BELOW = 0.02
+MAX_TIES = 40
 
 
 class SocialGraph:
@@ -70,6 +73,13 @@ class SocialGraph:
         out.sort(key=lambda x: (-x[1], x[0]))
         return out
 
+    def top_friends(self, pid: int, k: int, min_strength: float = 0.0) -> list[tuple[int, float]]:
+        """The ``k`` strongest friendships, without sorting everyone."""
+        if pid not in self.g:
+            return []
+        items = ((d["w"], -v, v) for v, d in self.g[pid].items() if d["kind"] == "friend" and d["w"] >= min_strength)
+        return [(int(v), w) for w, _, v in heapq.nlargest(k, items)]
+
     def degree(self, pid: int) -> int:
         return self.g.degree(pid) if pid in self.g else 0
 
@@ -91,7 +101,8 @@ class SocialGraph:
                         continue
                     if self.g.has_edge(p, other):
                         self.strengthen(p, other, MEET_GAIN * (0.5 + s))
-                    elif rng.random() < 0.15 * (0.5 + s):  # most chance meetings stay strangers
+                    elif self.degree(p) < MAX_TIES and self.degree(other) < MAX_TIES and rng.random() < 0.05 * (0.5 + s):
+                        # most chance meetings stay strangers, and nobody keeps up with more than MAX_TIES people
                         made += self.strengthen(p, other, 0.0)
         return made
 
@@ -113,7 +124,7 @@ class SocialGraph:
         drop = []
         for a, b, d in self.g.edges(data=True):
             if d["kind"] == "friend":
-                d["w"] *= DAILY_FADE
+                d["w"] *= DAILY_FADE if d["w"] >= 0.15 else WEAK_FADE  # acquaintances fade faster than friends
                 if d["w"] < FORGET_BELOW:
                     drop.append((a, b))
         self.g.remove_edges_from(drop)

@@ -93,7 +93,8 @@ class Brain:
         night = hour >= 22 or hour < 6
         age = p.age(t)
 
-        if age < 6:  # small children stay home with the family
+        if age < 6:  # small children stay home; the family feeds and plays with them
+            p.hunger, p.social, p.fun = max(p.hunger, 0.85), max(p.social, 0.8), max(p.fun, 0.8)
             if hour >= 20 or hour < 7:
                 wake = (t // MINUTES_PER_DAY + (1 if hour >= 20 else 0)) * MINUTES_PER_DAY + 7 * 60
                 self._go(p, SLEEP, home, wake, t)
@@ -125,7 +126,7 @@ class Brain:
         options.append((sleep_need, SLEEP, home, wake))
 
         options.append((urgency(p.hunger) * 2.4, EAT_HOME, home, t + 30))
-        options.append((0.35 + urgency(p.fun) * 0.6 + (0.4 if wx.dark else 0.0), HOME, home, t + 60))
+        options.append((0.35 + urgency(p.fun) * 0.6 + (0.4 if wx.dark else 0.0), HOME, home, t + 90))
 
         adult = age >= 18
         if adult:
@@ -138,9 +139,9 @@ class Brain:
                 options.append((urgency(p.fun) * 1.0 + 0.2 - self._far(here, s), SHOP, s, t + 40))
 
         if not night or adult and hour < 23:
-            friends = w.social.friends(p.id, 0.2)
+            friends = w.social.top_friends(p.id, 3, 0.2)
             if friends:
-                f = friends[int(self.rng.integers(min(3, len(friends))))][0]
+                f = friends[int(self.rng.integers(len(friends)))][0]
                 fhome = w.households[w.people[f].household].home
                 late = 0.8 if hour >= 22 or hour < 7 else 0.0
                 options.append(
@@ -156,7 +157,8 @@ class Brain:
                 score *= 0.3
             options.append((score - self._far(here, pk), PARK, pk, t + 60 + int(self.rng.integers(60))))
 
-        best = max(options, key=lambda o: o[0] + self.rng.gumbel(0.0, 0.12))
+        noise = self.rng.gumbel(0.0, 0.12, len(options))
+        best = options[max(range(len(options)), key=lambda i: options[i][0] + noise[i])]
         _, activity, place, until = best
         if activity == WORK:
             p.last_shift = win[0]

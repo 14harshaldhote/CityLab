@@ -1,3 +1,4 @@
+import type { Network } from "../components/EgoGraph";
 import type { BuildingCard, CityEvent, CityMap, DailyRow, Frame, PersonCard, Summary } from "./types";
 
 async function get<T>(path: string): Promise<T> {
@@ -16,6 +17,7 @@ export const api = {
   city: () => get<CityMap>("/api/city"),
   summary: () => get<Summary>("/api/summary"),
   person: (id: number) => get<PersonCard>(`/api/people/${id}`),
+  network: (id: number) => get<Network>(`/api/people/${id}/network`),
   building: (id: number) => get<BuildingCard>(`/api/buildings/${id}`),
   search: (q: string) => get<{ id: number; name: string; age: number; alive: boolean; activity: string | null }[]>(`/api/people?q=${encodeURIComponent(q)}&limit=30`),
   events: (kind?: string, limit = 60) => get<CityEvent[]>(`/api/events?limit=${limit}${kind ? `&kind=${kind}` : ""}`),
