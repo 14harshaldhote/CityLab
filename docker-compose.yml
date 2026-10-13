@@ -1,0 +1,14 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: citylab
+      POSTGRES_PASSWORD: citylab
+      POSTGRES_DB: citylab
+    volumes:
+      - citylab-db:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+volumes:
+  citylab-db:
