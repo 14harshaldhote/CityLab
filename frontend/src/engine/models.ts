@@ -269,6 +269,26 @@ export function buildingModel(b: Building): Model {
       glaze(cx, cz, bw, bd, 2, H - 4);
       break;
     }
+    case "court": {
+      // the district court: red sandstone, a white colonnade under a pediment, and a clock tower
+      const bw = b.w * 0.72;
+      const bd = b.h * 0.5;
+      P("box", cx, 0, cz, bw + 6, 2, bd + 10, C.concrete); // the steps
+      P("box", cx, 2, cz, bw, H - 2, bd, 0xb9442f);
+      P("box", cx, H, cz, bw + 1, 1.2, bd + 1, C.white); // cornice
+      for (let k = 0; k < 6; k++) P("cyl", cx - bw * 0.3 + k * (bw * 0.6) / 5, 2, cz + bd / 2 + 3, 1.6, H - 7, 1.6, C.white);
+      P("box", cx, H - 5, cz + bd / 2 + 3, bw * 0.68, 1.5, 5, C.white);
+      P("roof", cx, H - 3.5, cz + bd / 2 + 3, bw * 0.68, 6, 5, C.white); // pediment
+      const tx = cx + bw * 0.38;
+      P("box", tx, H, cz, 8, 18, 8, 0xb9442f); // clock tower
+      P("box", tx, H + 12, cz + 4.15, 5, 5, 0.2, C.white);
+      P("box", tx, H + 14.3, cz + 4.3, 0.4, 2.2, 0.1, C.tank);
+      P("box", tx + 0.9, H + 14.3, cz + 4.3, 1.8, 0.4, 0.1, C.tank);
+      P("dome", tx, H + 18, cz, 8, 6, 8, C.white);
+      flag(parts, cx - bw * 0.3, cz, H + 10, C.saffron, b.id, 0);
+      glaze(cx, cz, bw, bd, 2, H - 2);
+      break;
+    }
     case "bank": {
       const bw = b.w * 0.7;
       const bd = b.h * 0.5;
@@ -626,6 +646,20 @@ export function outskirtsModel(city: CityMap, ring = 3): Part[] {
       }
       if (hash01(id, 4) < 0.35) tree(parts, i * sp + 10 + hash01(id, 5) * (sp - 20), j * sp + 10 + hash01(id, 6) * (sp - 20), 1.2, id);
     }
+  }
+  return parts;
+}
+
+/** CCTV cameras on the street corners the police chose: a grey pole, a camera box and a little red light. */
+export function cameraModel(city: CityMap): Part[] {
+  const parts: Part[] = [];
+  for (const cam of city.cameras ?? []) {
+    const x = cam.x + 13;
+    const z = cam.y - 13;
+    parts.push({ s: "cyl", x, y: 0, z, w: 0.6, h: 9, d: 0.6, c: C.pole, bid: -1 });
+    parts.push({ s: "box", x: x + 1.2, y: 8.6, z, w: 2.4, h: 0.3, d: 0.3, c: C.pole, bid: -1 }); // the arm
+    parts.push({ s: "box", x: x + 2.6, y: 7.8, z, w: 2.2, h: 1.1, d: 1.1, c: 0xeae6dc, bid: -1, ry: -Math.PI / 4 });
+    parts.push({ s: "ball", x: x + 3.8, y: 8.1, z: z + 0.6, w: 0.45, h: 0.45, d: 0.45, c: C.red, bid: -1, glow: true });
   }
   return parts;
 }

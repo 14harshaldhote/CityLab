@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { CityMap as City, Frame } from "../api/types";
 import { daylight, hash01 } from "../engine/art";
-import { buildingModel, outskirtsModel, plotModel, siteHeight, streetModel, transitModel, type Part, type Shape, type Win } from "../engine/models";
+import { buildingModel, cameraModel, outskirtsModel, plotModel, siteHeight, streetModel, transitModel, type Part, type Shape, type Win } from "../engine/models";
 import { skyAt } from "../engine/sky";
 import { lerpFrames } from "../engine/view";
 
@@ -56,6 +56,8 @@ function toonRamp(): THREE.DataTexture {
   tex.needsUpdate = true;
   return tex;
 }
+
+const CRIME_NAMES = ["A pickpocketing", "Shoplifting", "A burglary"];
 
 const m4 = new THREE.Matrix4();
 const q = new THREE.Quaternion();
@@ -160,7 +162,7 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
       windows.push(...m.windows);
     }
     const streets = streetModel(city);
-    parts.push(...streets.parts, ...outskirtsModel(city), ...plotModel(city), ...transitModel(city));
+    parts.push(...streets.parts, ...outskirtsModel(city), ...plotModel(city), ...transitModel(city), ...cameraModel(city));
 
     const pickable: THREE.InstancedMesh[] = [];
     const meshBids = new Map<THREE.InstancedMesh, Int32Array>();
@@ -246,9 +248,44 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
       busWin.setColorAt(i, col.setHex(0x2b3a4a));
       busRoof.setColorAt(i, col.setHex(0xf4f1e8));
     }
+    // police cars: white with a blue band and a light bar that flashes red and blue
+    const COPS = 40;
+    const copBody = new THREE.InstancedMesh(new THREE.BoxGeometry(4.4, 1.15, 2).translate(0, 0.85, 0), solid, COPS);
+    const copTop = new THREE.InstancedMesh(new THREE.BoxGeometry(2.3, 0.85, 1.8).translate(-0.3, 1.85, 0), solid, COPS);
+    const copBand = new THREE.InstancedMesh(new THREE.BoxGeometry(4.45, 0.35, 2.05).translate(0, 0.95, 0), solid, COPS);
+    const copLights = new THREE.InstancedMesh(new THREE.BoxGeometry(0.5, 0.35, 0.8).translate(0, 2.45, 0), glowMat, COPS * 2);
+    for (const m of [copBody, copTop, copBand, copLights]) {
+      m.castShadow = m !== copLights;
+      m.frustumCulled = false;
+      m.count = 0;
+      m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      scene.add(m);
+    }
+    for (let i = 0; i < COPS; i++) {
+      copBody.setColorAt(i, col.setHex(0xf7f4ec));
+      copTop.setColorAt(i, col.setHex(0xf7f4ec));
+      copBand.setColorAt(i, col.setHex(0x2f55a8));
+    }
+    for (let i = 0; i < COPS * 2; i++) copLights.setColorAt(i, col.setHex(0xd2463c));
+    // a fresh theft: a red pin bobbing over the spot for three hours, blue once someone is arrested
+    const PINS = 60;
+    const pin = new THREE.InstancedMesh(new THREE.ConeGeometry(1, 2.2, 12).rotateX(Math.PI).translate(0, 1.1, 0), glowMat, PINS);
+    const pinHead = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 14, 10).translate(0, 2.6, 0), glowMat, PINS);
+    const pinRing = new THREE.InstancedMesh(
+      new THREE.RingGeometry(0.75, 1, 40).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.75, depthWrite: false, toneMapped: false }),
+      PINS,
+    );
+    for (const m of [pin, pinHead, pinRing]) {
+      m.frustumCulled = false;
+      m.count = 0;
+      m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      scene.add(m);
+    }
     const lineColor = new Map((city.transit?.lines ?? []).map((l) => [Number(l.number), parseInt(l.color.slice(1), 16)]));
     const lineName = new Map((city.transit?.lines ?? []).map((l) => [Number(l.number), l.name]));
     let busInfo: { route: number; riders: number }[] = [];
+    let crimeInfo: string[] = [];
 
     // traffic: streets glow amber when busy and red when jammed
     const nodeAt = new Map(city.nodes.map((nd) => [nd.id, nd]));
@@ -481,7 +518,50 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
       }
       busBody.count = busWin.count = busRoof.count = Math.min(list.length, BUSES);
       busBody.computeBoundingSphere();
-      for (const m of [bodies, heads, carBody, carTop, autoBody, autoTop, busBody, busWin, busRoof]) {
+
+      const wasCop = new Map((prev?.police ?? []).map((c) => [c[0], c]));
+      const cops = next.police ?? [];
+      const ps = Math.max(1.3, S * 0.6);
+      const flash = Math.floor(time * 3) % 2;
+      for (let k = 0; k < cops.length && k < COPS; k++) {
+        const [id, px, py, hd] = cops[k];
+        const o = wasCop.get(id);
+        const x0 = o && prev ? o[1] + (px - o[1]) * f : px;
+        const y0 = o && prev ? o[2] + (py - o[2]) * f : py;
+        const x = x0 + Math.sin(hd) * 5;
+        const z = y0 - Math.cos(hd) * 5;
+        place(copBody, k, x, 0.3, z, ps, ps, ps, -hd);
+        place(copTop, k, x, 0.3, z, ps, ps, ps, -hd);
+        place(copBand, k, x, 0.3, z, ps, ps, ps, -hd);
+        for (const side of [0, 1]) {
+          const off = (side ? 0.45 : -0.45) * ps;
+          place(copLights, 2 * k + side, x - Math.sin(hd) * off, 0.3, z + Math.cos(hd) * off, ps, ps, ps, -hd);
+          copLights.setColorAt(2 * k + side, col.setHex(side === flash ? 0xff3b30 : 0x2f7bff));
+        }
+      }
+      copBody.count = copTop.count = copBand.count = Math.min(cops.length, COPS);
+      copLights.count = 2 * copBody.count;
+
+      const crimes = next.crimes ?? [];
+      let np = 0;
+      crimeInfo = [];
+      for (const [cx, cy, ago, kind, solved] of crimes) {
+        if (np >= PINS) break;
+        const fresh = 1 - Math.min(1, ago / 180);
+        const ps2 = S * (1.8 + 1.4 * fresh);
+        const bob = 16 + Math.sin(time * 3 + cx) * 2;
+        const c = solved ? 0x2c7fb8 : 0xe0302a;
+        place(pin, np, cx, bob, cy, ps2, ps2, ps2, time);
+        place(pinHead, np, cx, bob, cy, ps2 * 0.9, ps2 * 0.9, ps2 * 0.9);
+        const pulse = (8 + ((time * 0.8 + np * 0.3) % 1) * 22) * (S / 2.5);
+        place(pinRing, np, cx, 0.7, cy, pulse, 1, pulse);
+        for (const m of [pin, pinHead, pinRing]) m.setColorAt(np, col.setHex(c));
+        crimeInfo.push(`${CRIME_NAMES[kind] ?? "A theft"} ${ago < 60 ? `${ago} min` : `${Math.floor(ago / 60)} h`} ago${solved ? ", suspect arrested" : ""}`);
+        np++;
+      }
+      pin.count = pinHead.count = pinRing.count = np;
+
+      for (const m of [bodies, heads, carBody, carTop, autoBody, autoTop, busBody, busWin, busRoof, copBody, copTop, copBand, copLights, pin, pinHead, pinRing]) {
         m.instanceMatrix.needsUpdate = true;
         if (m.instanceColor) m.instanceColor.needsUpdate = true;
       }
@@ -521,10 +601,14 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
       const person = ray.intersectObject(bodies, false)[0];
       const bus = ray.intersectObject(busBody, false)[0];
       if (bus && bus.instanceId !== undefined && (!person || bus.distance < person.distance)) return { bus: busInfo[bus.instanceId] };
+      const cop = ray.intersectObject(copBody, false)[0];
+      if (cop && (!person || cop.distance < person.distance)) return { police: true };
+      const alert = ray.intersectObject(pinHead, false)[0] ?? ray.intersectObject(pin, false)[0];
+      if (alert && alert.instanceId !== undefined) return { crime: crimeInfo[alert.instanceId] };
       const thing = ray.intersectObjects(pickable, false).find((h) => h.instanceId !== undefined && meshBids.get(h.object as THREE.InstancedMesh)![h.instanceId!] >= 0);
       if (person && person.instanceId !== undefined && (!thing || person.distance <= thing.distance + 20)) return { person: shown[person.instanceId] };
       if (thing) return { building: meshBids.get(thing.object as THREE.InstancedMesh)![thing.instanceId!] };
-      return {} as { person?: number; building?: number; bus?: { route: number; riders: number } };
+      return {} as { person?: number; building?: number; bus?: { route: number; riders: number }; police?: boolean; crime?: string };
     };
     let down: { x: number; y: number } | null = null;
     const onDown = (e: PointerEvent) => {
@@ -547,7 +631,11 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
       const text =
         hit.bus !== undefined
           ? `Bus ${hit.bus.route}: ${lineName.get(hit.bus.route) ?? ""} · ${hit.bus.riders} on board`
-          : hit.building !== undefined
+          : hit.police
+            ? "Police patrol"
+            : hit.crime
+              ? hit.crime
+              : hit.building !== undefined
             ? city.buildings[hit.building]?.name
             : hit.person !== undefined
               ? "Click to follow this person"

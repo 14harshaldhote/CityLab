@@ -42,7 +42,13 @@ completely free and runs on your own computer.
    site, who's paying for it and how many days are left. When a housing society
    is finished, new families move in. And if a street jams day after day, road
    crews arrive with cones and widen it to four lanes.
-10. **Switch to the flat map.** Press *Map* for a colourful, hand-drawn view where
+10. **Play detective.** Thefts happen now and then: a wallet lifted on a crowded
+    bus, a packet of biscuits slipped out of a shop, a house burgled while the
+    family is at work. A red pin pops up over the spot. Watch police cars with
+    flashing lights cruise the streets, spot the CCTV cameras on busy corners,
+    and open the *Safety* tab to follow each case from the first report to the
+    verdict at the District Court. Click a suspect to see what drove them to it.
+11. **Switch to the flat map.** Press *Map* for a colourful, hand-drawn view where
     every dot is a person, coloured by what they're doing.
 
 ![Kamalnagar at night](docs/images/city-night.png)
@@ -74,6 +80,14 @@ These are the same ideas that power modern games and AI, in plain words.
   feels longer than riding, walking in the rain feels much longer, and a fare
   matters more to someone who earns less. That's how real cities end up with
   their mix of buses, autos and footpaths.
+* **Crime comes from hard times, never from who you are.** Nobody in Kamalnagar
+  is born a thief. People are only tempted when their money runs out, their debts
+  pile up or they lose their job, and a little more if they've been caught
+  before. Faith, name and neighbourhood make no difference at all, and the city's
+  tests check that. A police car nearby puts most thieves off, a camera or a
+  witness makes a case stronger, and stronger evidence makes a guilty verdict
+  more likely. It's a small taste of how researchers model crime, and why fair
+  rules matter when computers help make decisions about people.
 * **The city plans ahead.** The municipal corporation keeps an eye on how full
   the homes are, how many jobs are waiting and whether there are enough shops and
   school seats. When something runs short, it decides what to build next, a bit
@@ -98,7 +112,7 @@ These are the same ideas that power modern games and AI, in plain words.
   Christian, Sikh and Parsi, with names from their community.
 * **Places to go:** bungalows and housing societies with water tanks on the roof,
   glass office towers, shops, restaurants, factories, schools, a hospital, the
-  police station, the municipal corporation and City Bank.
+  police station, the District Court, the municipal corporation and City Bank.
 * **Places of worship:** mandirs, masjids, a church, a gurudwara with its free
   langar, a Buddha vihar, a Jain derasar and a Parsi agiary.
 * **Money:** wages, rent, groceries, water bills, taxes, pensions, savings,
@@ -106,7 +120,7 @@ These are the same ideas that power modern games and AI, in plain words.
 * **Getting around:** five city bus routes, including a ring road around the
   centre, with almost 50 stops, plus autos and cars. Streets are named the
   Indian way, like M.G. Road, Tilak Road and Gandhi Marg.
-* **People who run the city:** a town planning office, a public works department
+* **People who run the city:** the police and the District Court, a town planning office, a public works department
   that lays and widens roads, the municipal bus service, an education department,
   the water supply, and local builders who borrow from City Bank to put up new
   homes and shops.
@@ -114,6 +128,8 @@ These are the same ideas that power modern games and AI, in plain words.
 ![New housing societies going up in Nadi Kinara](docs/images/city-growing.png)
 
 ![The Friday morning rush: red streets are jammed](docs/images/city-rush-hour.png)
+
+![The Safety tab: today's thefts, the court list and every open case](docs/images/city-safety.png)
 
 ![Someone's life story](docs/images/person-card.png)
 
@@ -151,7 +167,6 @@ set `CITYLAB_POPULATION`.
 
 ## Coming soon
 
-* Crime, police patrols, CCTV cameras and courts.
 * A time machine to rewind the city and try "what if...?".
 * Chatting with the city: ask it anything about its people and history.
 * AI-run city leaders who make decisions you can watch.

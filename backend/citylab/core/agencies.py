@@ -121,6 +121,8 @@ class Government:
             Department("education", "Education Department", "government", "Makes sure every child has a school seat."),
             Department("water", "Water Supply Department", "government", "Supplies water to every home and bills for it."),
             Department("transport", "Kamalnagar Municipal Transport", "government", "Runs the city buses and keeps an eye on traffic."),
+            Department("police", "Kamalnagar Police", "government", "Patrols the streets, investigates thefts and puts up CCTV cameras."),
+            Department("court", "District Court", "government", "Hears the cases the police bring and decides who is guilty."),
             Department("builders", "Private builders", "private", "Developers who build housing societies, offices and shops."),
             Department("trusts", "Community trusts", "private", "Raise money to build new places of worship."),
         ):
@@ -134,6 +136,7 @@ class Government:
         self._heads()
         self._water()
         self._transport()
+        self._justice()
         self._build(rng)
         self._roads()
         self._widen()
@@ -142,12 +145,14 @@ class Government:
     def _heads(self) -> None:
         """Each department is led by someone who works at the municipal corporation."""
         w = self.w
-        hall = next((b.id for b in w.city.buildings if b.kind == "city_hall"), None)
-        staff = sorted(w.job_holders.get(hall, []), key=lambda q: (-w.people[q].skill, q)) if hall is not None else []
+        home_of = {"police": "police", "court": "court"}  # led from their own building; the rest from City Hall
         taken = {d.head for d in self.departments.values() if d.head is not None}
         for d in self.departments.values():
             if d.sector != "government":
                 continue
+            kind = home_of.get(d.key, "city_hall")
+            hall = next((b.id for b in w.city.buildings if b.kind == kind and b.status == "open"), None)
+            staff = sorted(w.job_holders.get(hall, []), key=lambda q: (-w.people[q].skill, q)) if hall is not None else []
             p = w.people.get(d.head) if d.head is not None else None
             if p is None or not p.alive or p.job is None or p.job.building != hall:
                 taken.discard(d.head)
@@ -182,6 +187,16 @@ class Government:
         jam = f" Slowest street: {y['worst_jam']}." if y.get("worst_jam") else ""
         d.watching = (f"Buses carried {y['bus_riders']} passengers yesterday. The average trip to work or school took "
                       f"{y['commute_min']:.0f} minutes and {y['late']} people were late for work.{jam}")
+
+    def _justice(self) -> None:
+        cr = self.w.crime
+        police, court = self.departments["police"], self.departments["court"]
+        open_cases = sum(1 for c in cr.cases.values() if c.status == "investigating")
+        police.watching = (f"{open_cases} open {'case' if open_cases == 1 else 'cases'}, {len(cr.patrols)} patrol "
+                           f"{'car' if len(cr.patrols) == 1 else 'cars'} on the road and {len(cr.cameras)} CCTV cameras.")
+        police.done = sum(1 for c in cr.cases.values() if c.status in ("awaiting trial", "convicted", "acquitted"))
+        court.watching = f"{len(cr.court)} {'case' if len(cr.court) == 1 else 'cases'} waiting for a hearing."
+        court.done = sum(1 for c in cr.cases.values() if c.status in ("convicted", "acquitted"))
 
     # ---- construction ---------------------------------------------------------------------
 

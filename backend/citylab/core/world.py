@@ -29,6 +29,7 @@ from .people import ACTIVITY_NAMES, SLEEP, TRAVEL, Household, Job, Person
 from .rng import Streams, stable_hash
 from .routing import Router
 from .transport import Transport
+from .crime import Crime
 from .social import SocialGraph
 from .weather import Weather
 
@@ -62,6 +63,7 @@ class World:
         self._founded = False
         self.government = Government(self)
         self.transport = Transport(self)
+        self.crime = Crime(self)
         self._populate(population)
         self.economy.found()
         self._founded = True
@@ -84,6 +86,7 @@ class World:
             if t % MINUTES_PER_DAY == 0:
                 lifecycle.end_of_day(self)
             self.transport.tick(t)
+            self.crime.tick(t)
             while q and q[0][0] <= t:
                 until, pid = heapq.heappop(q)
                 p = self.people.get(pid)
@@ -364,6 +367,7 @@ class World:
             "move": moves,
             "buses": self.transport.buses(t),
             "traffic": self.transport.traffic(t),
+            **self.crime.frame(t),
             "city_version": self.city.version,
             "sites": [[b.id, round(b.progress, 3)] for b in self.city.buildings if b.status == "construction"],
             "counts": {ACTIVITY_NAMES[k]: acts.count(k) for k in range(len(ACTIVITY_NAMES))},
@@ -416,6 +420,8 @@ class World:
             "activity": ACTIVITY_NAMES[p.activity],
             "place": self.city.buildings[p.place].name if p.place is not None else None,
             "travel": self.transport.describe(p, t) if p.alive and p.activity == TRAVEL else None,
+            "convictions": p.record,
+            "in_jail_until": SimTime(p.jailed_until).label() if p.alive and p.jailed_until > t else None,
             "heading_to": self.city.buildings[p.pending.place].name if p.pending else None,
             "until": SimTime(p.until).label() if p.alive else None,
             "friends": friends,

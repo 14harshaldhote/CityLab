@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Building, CityMap } from "../../api/types";
-import { buildingModel, outskirtsModel, plotModel, siteHeight, siteModel, streetModel, transitModel } from "../models";
+import { buildingModel, cameraModel, outskirtsModel, plotModel, siteHeight, siteModel, streetModel, transitModel } from "../models";
 
-const kinds = ["home", "office", "shop", "restaurant", "factory", "school", "hospital", "police", "city_hall", "bank", "park", "bus_depot",
+const kinds = ["home", "office", "shop", "restaurant", "factory", "school", "hospital", "police", "city_hall", "court", "bank", "park", "bus_depot",
   "temple", "mosque", "church", "gurudwara", "vihara", "derasar", "agiary"];
 
 const lot = (id: number, kind: string, households = 0): Building => ({
@@ -91,5 +91,24 @@ describe("3D models", () => {
     expect(road(base).d).toBe(20);
     expect(road({ ...base, wide: [[1, 0]] }).d).toBe(30);
     expect(streetModel({ ...base, widening: [[0, 1]] }).parts.filter((p) => p.s === "cone").length).toBeGreaterThan(20);
+  });
+
+  it("gives the court a white colonnade, a pediment and a clock tower above its roof", () => {
+    const m = buildingModel(lot(3, "court"));
+    expect(m.parts.filter((p) => p.s === "cyl" && p.c === 0xf7f4ec).length).toBe(6);
+    expect(m.parts.some((p) => p.s === "roof")).toBe(true);
+    expect(Math.max(...m.parts.map((p) => p.y + p.h))).toBeGreaterThan(40);
+  });
+
+  it("puts a CCTV pole with a red light at every camera corner", () => {
+    const base: CityMap = {
+      name: "Kamalnagar", size: 520, spacing: 260, districts: [], activities: [],
+      nodes: [{ id: 0, x: 260, y: 260 }], edges: [], buildings: [],
+      cameras: [{ node: 0, x: 260, y: 260, name: "Kamal Chowk" }],
+    };
+    const parts = cameraModel(base);
+    expect(parts.some((p) => p.glow && p.c === 0xd2463c)).toBe(true);
+    for (const p of parts) expect(Math.hypot(p.x - 260, p.z - 260)).toBeLessThan(25);
+    expect(cameraModel({ ...base, cameras: undefined })).toEqual([]);
   });
 });

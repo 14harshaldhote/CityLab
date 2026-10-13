@@ -78,6 +78,12 @@ export default function PersonPanel({ card, net, onPick }: { card: PersonCard; n
                 ? "Looking for work."
                 : "Not working."}
       </p>
+      {card.in_jail_until && <p className="warn">In jail until {card.in_jail_until}.</p>}
+      {!card.in_jail_until && (card.convictions ?? 0) > 0 && (
+        <p className="muted small">
+          Has been found guilty of theft {card.convictions === 1 ? "once" : `${card.convictions} times`}. Hard times make it more tempting to slip again.
+        </p>
+      )}
 
       <h3>Money</h3>
       <p>

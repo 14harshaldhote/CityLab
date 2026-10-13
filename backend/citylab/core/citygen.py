@@ -71,6 +71,7 @@ TYPES: dict[str, BuildingType] = {
         BuildingType("city_hall", "City Hall", 40, OFFICE_HOURS, 150.0, 9 * H, 17 * H, True),
         BuildingType("bank", "Bank", 20, OFFICE_HOURS, 165.0, 9 * H, 17 * H, True),
         BuildingType("park", "Park", 2, (Shift(7 * H, 15 * H, False),), 80.0, 6 * H, 22 * H),
+        BuildingType("court", "District Court", 12, OFFICE_HOURS, 185.0, 10 * H, 17 * H, True),
         BuildingType("bus_depot", "Bus depot", 20, (Shift(5 * H, 13 * H, False), Shift(13 * H, 21 * H, False)), 110.0),
         # places of worship: priests, caretakers and kitchen volunteers, paid by the trust from offerings
         BuildingType("temple", "Mandir", 4, (Shift(5 * H, 13 * H, False), Shift(13 * H, 21 * H, False)), 85.0, 5 * H, 21 * H + 30),
@@ -279,7 +280,7 @@ def generate_city(seed: int, n: int = 16, spacing: float = 260.0, developed_radi
     counters: dict[str, int] = {}
     used: set[str] = set()
     for (i, j), zone in zones.items():
-        zone_of[(i, j)] = "industrial" if zone == "industrial" else "commercial" if zone in ("downtown", "local", "civic") else "residential"
+        zone_of[(i, j)] = "industrial" if zone == "industrial" else "commercial" if zone in ("downtown", "local", "civic", "justice") else "residential"
         r, ang = block_info(i, j)
         district = CENTRE if r < 1.8 else DISTRICTS[int(((ang + math.pi) / (2 * math.pi)) * 8) % 8]
         for kind, (qx, qy, qw, qh), extra in _block_layout(rng, zone, r):
@@ -330,6 +331,8 @@ def _zone_blocks(rng: np.random.Generator, developed: np.ndarray, c: float) -> d
     if len(central) >= 2:
         zones[central[0]] = "civic"
         zones[central[1]] = "central_park"
+    if len(central) >= 3:
+        zones[central[2]] = "justice"  # the District Court, with offices and tea shops around it
     # schools: one per ~10 residential blocks, spread out
     res = [k for k, v in zones.items() if v == "residential"]
     for k in [res[i] for i in rng.permutation(len(res))[: max(2, len(res) // 10)]]:
@@ -352,6 +355,8 @@ def _block_layout(rng: np.random.Generator, zone: str, r: float) -> Layout:
     if zone == "civic":
         kinds = ["city_hall", "police", "bank", "hospital"]
         return [(k, q, 0) for k, q in zip(kinds, QUADS)]
+    if zone == "justice":
+        return [("court", (0.0, 0.0, 1.0, 0.5), 0), ("office", QUADS[2], 0), ("shop", QUADS[3], 0)]
     if zone == "central_park":
         return [("park", full, 0)]
     if zone == "park":
@@ -423,6 +428,8 @@ def _name(kind: str, district: str, k: int, households: int = 0, zone: str = "")
         return f"{CITY_NAME} Civil Hospital"
     if kind == "police":
         return f"{CENTRE} Police Station"
+    if kind == "court":
+        return f"{CITY_NAME} District Court"
     if kind == "park" and zone == "central_park":
         return "Kamal Talav"  # the lotus lake
     if kind in WORSHIP:

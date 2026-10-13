@@ -68,6 +68,7 @@ def end_of_day(w: World) -> None:
     traffic = w.transport.close_day()
     w.government.daily()  # departments and builders, before the books close (crews are paid with today's wages)
     money = w.economy.end_of_day()
+    crime = w.crime.daily()
 
     for p in alive:
         _birthday(w, p, t)
@@ -90,6 +91,7 @@ def end_of_day(w: World) -> None:
     row.update(asdict(w.today))
     row.update({k: v for k, v in money.items() if k != "flows"})
     row.update(traffic)
+    row.update(crime)
     row["day"] = SimTime(t).day
     row["clustering"] = w.social.clustering() if SimTime(t).day % 7 == 0 else (w.daily[-1]["clustering"] if w.daily else 0.0)
     w.daily.append(row)

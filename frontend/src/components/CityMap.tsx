@@ -71,6 +71,12 @@ export default function CityMap({ city, frames, selectedPerson, selectedBuilding
       ground.roundRect(st.x - 26, st.y + 12, 14, 9, 2).fill(0x2f7d5b).stroke({ width: 1.2, color: 0xfffaf0 });
       st.lines.forEach((n, k) => ground.circle(st.x - 23 + k * 4, st.y + 26, 1.8).fill(lineColor.get(n) ?? 0x3f63a5));
     }
+    // CCTV cameras: a grey pole with a little camera looking along the street
+    for (const cam of city.cameras ?? []) {
+      ground.circle(cam.x + 14, cam.y - 14, 3.5).fill(0x55585c).stroke({ width: 1, color: 0xfffaf0 });
+      ground.poly([cam.x + 14, cam.y - 14, cam.x + 26, cam.y - 19, cam.x + 26, cam.y - 9]).fill({ color: 0x3b2f27, alpha: 0.75 });
+      ground.circle(cam.x + 14, cam.y - 14, 1.3).fill(0xd2463c);
+    }
     const nodeAt = new Map(city.nodes.map((nd) => [nd.id, nd]));
     const busColor = new Map((city.transit?.lines ?? []).map((l) => [Number(l.number), parseInt(l.color.slice(1), 16)]));
     let trafficT = -1;
@@ -232,7 +238,35 @@ export default function CityMap({ city, frames, selectedPerson, selectedBuilding
         buses.poly(body).fill(busColor.get(route) ?? 0xd2463c).stroke({ width: 1.5 / world.scale.x + 0.6, color: 0xfffaf0 });
       }
 
+      // police cars: white with a blue stripe and a light bar flashing red and blue
+      const flash = Math.floor(performance.now() / 350) % 2;
+      const wasCar = new Map((prev?.police ?? []).map((c) => [c[0], c]));
+      const PL = L * 0.6;
+      const PW = PL * 0.5;
+      for (const [id, px, py, hd] of next.police ?? []) {
+        const o = wasCar.get(id);
+        const x = (o && prev ? o[1] + (px - o[1]) * f : px) + Math.sin(hd) * 5;
+        const y = (o && prev ? o[2] + (py - o[2]) * f : py) - Math.cos(hd) * 5;
+        const ux = Math.cos(hd);
+        const uy = Math.sin(hd);
+        const corner = (a: number, b: number) => [x + ux * a - uy * b, y + uy * a + ux * b];
+        buses.poly([...corner(PL / 2, PW / 2), ...corner(PL / 2, -PW / 2), ...corner(-PL / 2, -PW / 2), ...corner(-PL / 2, PW / 2)]).fill(0xf7f4ec).stroke({ width: 1 / world.scale.x + 0.5, color: 0x3f63a5 });
+        buses.poly([...corner(PL / 2, PW / 6), ...corner(PL / 2, -PW / 6), ...corner(-PL / 2, -PW / 6), ...corner(-PL / 2, PW / 6)]).fill(0x3f63a5);
+        const [lx, ly] = corner(0, PW / 4);
+        const [rx, ry] = corner(0, -PW / 4);
+        buses.circle(lx, ly, PW * 0.22).fill(flash ? 0xd2463c : 0x2f6fe0);
+        buses.circle(rx, ry, PW * 0.22).fill(flash ? 0x2f6fe0 : 0xd2463c);
+      }
+
       marks.clear();
+      // a fresh theft: a red ring that fades over three hours, ticked once the thief is caught
+      for (const [cx, cy, ago, , solved] of next.crimes ?? []) {
+        const a = Math.max(0.15, 1 - ago / 180);
+        const rr = Math.max(14, 8 / world.scale.x);
+        marks.circle(cx, cy, rr).fill({ color: solved ? 0x2c7fb8 : 0xd2463c, alpha: 0.18 * a }).stroke({ width: 2.5 / world.scale.x + 1, color: solved ? 0x2c7fb8 : 0xd2463c, alpha: a });
+        marks.rect(cx - rr * 0.08, cy - rr * 0.55, rr * 0.16, rr * 0.65).fill({ color: solved ? 0x2c7fb8 : 0xd2463c, alpha: a });
+        marks.circle(cx, cy + rr * 0.35, rr * 0.1).fill({ color: solved ? 0x2c7fb8 : 0xd2463c, alpha: a });
+      }
       const { person, building } = sel.current;
       if (building !== null) {
         const b = city.buildings[building];
@@ -434,6 +468,13 @@ function drawBuilding(g: Graphics, b: Building, height: number) {
       g.circle(cx, cy, Math.min(b.w, b.h) * 0.22).fill(0xf6e3a3).stroke(ink);
       g.circle(cx - 3, cy - 3, Math.min(b.w, b.h) * 0.08).fill({ color: 0xffffff, alpha: 0.7 });
       break;
+    case "court": {
+      // a pediment over white columns
+      const cw = Math.min(b.w, b.h) * 0.5;
+      g.poly([cx - cw / 2, cy - 5, cx + cw / 2, cy - 5, cx, cy - 13]).fill(0xf7f4ec).stroke(ink);
+      for (let k = 0; k < 4; k++) g.rect(cx - cw / 2 + 2 + (k * (cw - 6)) / 3, cy - 4, 2.5, 12).fill(0xf7f4ec);
+      break;
+    }
     case "police":
       g.star(cx, cy, 5, Math.min(b.w, b.h) * 0.18).fill(0xf2d16b).stroke(ink);
       break;

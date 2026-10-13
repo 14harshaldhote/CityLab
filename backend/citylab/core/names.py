@@ -37,7 +37,7 @@ FIRST: dict[str, dict[str, tuple[str, ...]]] = {
         "F": ("Aarti", "Aditi", "Ananya", "Anjali", "Asha", "Bhakti", "Deepa", "Gauri", "Isha", "Jyoti", "Kavya", "Lakshmi",
               "Madhuri", "Meera", "Neha", "Pooja", "Priya", "Radha", "Rutuja", "Sakshi", "Sanika", "Shreya", "Shruti", "Smita",
               "Sneha", "Sunita", "Swati", "Tanvi", "Vaishnavi", "Vidya"),
-        "M": ("Aarav", "Aditya", "Ajay", "Akash", "Amit", "Aniket", "Arjun", "Ashok", "Chetan", "Ganesh", "Harshal", "Kiran",
+        "M": ("Aarav", "Aditya", "Ajay", "Akash", "Amit", "Aniket", "Arjun", "Ashok", "Chetan", "Ganesh", "Hemant", "Kiran",
               "Krishna", "Mahesh", "Manoj", "Nikhil", "Omkar", "Pranav", "Prasad", "Rahul", "Rajesh", "Rohan", "Sachin", "Sagar",
               "Sanjay", "Shivam", "Siddharth", "Suresh", "Tushar", "Vinayak"),
     },
@@ -78,7 +78,7 @@ FIRST: dict[str, dict[str, tuple[str, ...]]] = {
 }
 
 FAMILY: dict[str, tuple[str, ...]] = {
-    "hindu": ("Patil", "Deshmukh", "Kulkarni", "Joshi", "Pawar", "Jadhav", "Shinde", "Chavan", "More", "Dhote", "Deshpande",
+    "hindu": ("Patil", "Deshmukh", "Kulkarni", "Joshi", "Pawar", "Jadhav", "Shinde", "Chavan", "More", "Salunkhe", "Deshpande",
               "Gokhale", "Bhosale", "Sawant", "Naik", "Sharma", "Verma", "Gupta", "Iyer", "Nair", "Menon", "Reddy", "Rao", "Bose",
               "Das", "Kapoor", "Malhotra", "Mishra", "Pandey", "Yadav"),
     "muslim": ("Khan", "Shaikh", "Ansari", "Qureshi", "Siddiqui", "Sayyed", "Pathan", "Inamdar", "Mulla", "Tamboli", "Bagwan",

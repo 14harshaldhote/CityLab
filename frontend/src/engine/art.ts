@@ -60,6 +60,7 @@ export const ROOF: Record<string, number> = {
   hospital: 0xf0f0ec,
   police: 0x7b93c9,
   city_hall: 0xe9cf7f,
+  court: 0xb9442f, // red sandstone, like the old courts of the Raj
   bank: 0x8fbf9f,
   park: 0xc9d6a3,
   bus_depot: 0xb7aea0,
@@ -90,6 +91,7 @@ export const PEOPLE = [
   0xc9a10f, // shopping
   0x26201c, // travelling
   0x149c8f, // at a place of worship
+  0x6b6f7a, // in jail
 ];
 
 export const LEGEND_KINDS: [string, string][] = [
@@ -103,6 +105,7 @@ export const LEGEND_KINDS: [string, string][] = [
   ["hospital", "Hospital"],
   ["police", "Police"],
   ["city_hall", "City Hall"],
+  ["court", "Court"],
   ["bank", "Bank"],
   ["park", "Parks"],
   ["worship", "Places of worship"],
@@ -144,6 +147,8 @@ export function buildingHeight(b: Footprint): number {
       return 22;
     case "city_hall":
       return 32;
+    case "court":
+      return 24;
     case "bank":
       return 40;
     case "bus_depot":

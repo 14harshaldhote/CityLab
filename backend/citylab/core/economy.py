@@ -45,7 +45,7 @@ if TYPE_CHECKING:
     from .people import Person
     from .world import World
 
-PUBLIC = ("school", "hospital", "police", "city_hall", "park")
+PUBLIC = ("school", "hospital", "police", "city_hall", "park", "court")
 TRUSTS = ("temple", "mosque", "church", "gurudwara", "vihara", "derasar", "agiary")  # run on offerings, pay no tax or dividends
 OWN_PAYER = {"bank": "bank"}  # City Bank pays its own staff from its own account
 EXPORTERS = ("office", "factory", "bus_depot")

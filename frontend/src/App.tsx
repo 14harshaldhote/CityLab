@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, liveFrames } from "./api/client";
-import type { Agencies, Transport, BuildingCard, CityEvent, CityMap as City, DailyRow, Economy, Frame, PersonCard, Summary } from "./api/types";
+import type { Agencies, Safety, Transport, BuildingCard, CityEvent, CityMap as City, DailyRow, Economy, Frame, PersonCard, Summary } from "./api/types";
 import AgenciesPanel from "./components/AgenciesPanel";
 import BuildingPanel from "./components/BuildingPanel";
 import City3D from "./components/City3D";
@@ -10,12 +10,13 @@ import type { Network } from "./components/EgoGraph";
 import LineChart from "./components/LineChart";
 import PersonPanel from "./components/PersonPanel";
 import RoadsPanel from "./components/RoadsPanel";
+import SafetyPanel from "./components/SafetyPanel";
 import TimeBar from "./components/TimeBar";
 import { advise } from "./engine/advisor";
 import { LEGEND_KINDS, ROOF } from "./engine/art";
 import { ACTIVITY_COLORS, hex } from "./engine/view";
 
-type Tab = "city" | "person" | "place" | "roads" | "agencies" | "economy" | "records" | "charts";
+type Tab = "city" | "person" | "place" | "roads" | "safety" | "agencies" | "economy" | "records" | "charts";
 
 function usePoll(fn: () => void, ms: number, deps: unknown[]) {
   useEffect(() => {
@@ -46,6 +47,7 @@ export default function App() {
   const [econ, setEcon] = useState<Economy | null>(null);
   const [agencies, setAgencies] = useState<Agencies | null>(null);
   const [roads, setRoads] = useState<Transport | null>(null);
+  const [safety, setSafety] = useState<Safety | null>(null);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<{ id: number; name: string; age: number; activity: string | null }[]>([]);
 
@@ -80,6 +82,7 @@ export default function App() {
   usePoll(() => (tab === "economy" || tab === "city") && api.economy().then(setEcon, () => undefined), 3000, [tab]);
   usePoll(() => tab === "agencies" && api.agencies().then(setAgencies, () => undefined), 2500, [tab]);
   usePoll(() => tab === "roads" && api.transport().then(setRoads, () => undefined), 2000, [tab]);
+  usePoll(() => tab === "safety" && api.safety().then(setSafety, () => undefined), 2500, [tab]);
   usePoll(() => (tab === "charts" || tab === "city") && api.daily().then(setDaily, () => undefined), 5000, [tab]);
   const tips = useMemo(() => advise(summary, econ, daily), [summary, econ, daily]);
 
@@ -127,6 +130,12 @@ export default function App() {
         { label: "bus rides", color: "#2c7fb8", values: daily.map((d) => d.trips_bus ?? 0) },
         { label: "auto rides", color: "#e0a21b", values: daily.map((d) => d.trips_auto ?? 0) },
         { label: "car trips", color: "#d2463c", values: daily.map((d) => d.trips_car ?? 0) },
+      ],
+      crime: [
+        { label: "thefts", color: "#b3261e", values: daily.map((d) => d.crimes ?? 0) },
+        { label: "put off by patrols", color: "#8a8f98", values: daily.map((d) => d.deterred ?? 0) },
+        { label: "arrests", color: "#2c7fb8", values: daily.map((d) => d.arrests ?? 0) },
+        { label: "found guilty", color: "#8a4fc6", values: daily.map((d) => d.convicted ?? 0) },
       ],
       budget: [
         { label: "city budget", color: "#2c7fb8", values: daily.map((d) => d.city) },
@@ -217,7 +226,7 @@ export default function App() {
         </section>
         <aside>
           <nav className="tabs">
-            {(["city", "person", "place", "roads", "agencies", "economy", "records", "charts"] as Tab[]).map((t) => (
+            {(["city", "person", "place", "roads", "safety", "agencies", "economy", "records", "charts"] as Tab[]).map((t) => (
               <button key={t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>
                 {t[0].toUpperCase() + t.slice(1)}
               </button>
@@ -290,6 +299,8 @@ export default function App() {
           {tab === "person" && (person ? <PersonPanel card={person} net={net && net.center === person.id ? net : null} onPick={pickPerson} /> : <div className="card muted">Click a person on the map.</div>)}
           {tab === "place" && (building ? <BuildingPanel card={building} onPick={pickPerson} /> : <div className="card muted">Click a building on the map.</div>)}
           {tab === "roads" && (roads ? <RoadsPanel data={roads} /> : <div className="card muted">Counting the traffic...</div>)}
+          {tab === "safety" &&
+            (safety ? <SafetyPanel data={safety} onPick={pickPerson} onPickBuilding={pickBuilding} /> : <div className="card muted">Opening the case files...</div>)}
           {tab === "agencies" &&
             (agencies ? <AgenciesPanel data={agencies} onPickPerson={pickPerson} onPickBuilding={pickBuilding} /> : <div className="card muted">Asking City Hall...</div>)}
           {tab === "economy" && (econ ? <EconomyPanel econ={econ} onPickBuilding={pickBuilding} /> : <div className="card muted">Loading the books...</div>)}
@@ -313,6 +324,11 @@ export default function App() {
                 <option value="roads">Roads and roadworks</option>
                 <option value="traffic">Rush hour</option>
                 <option value="buses">Buses</option>
+                <option value="crime">Thefts</option>
+                <option value="arrest">Arrests</option>
+                <option value="court">Court verdicts</option>
+                <option value="released">Released from jail</option>
+                <option value="cctv">CCTV cameras</option>
                 <option value="construction">Construction</option>
                 <option value="opened">New buildings</option>
                 <option value="loan">Loans</option>
@@ -348,6 +364,8 @@ export default function App() {
               <h2>Getting around</h2>
               <LineChart days={chart.days} series={chart.travel} height={130} />
               <LineChart days={chart.days} series={chart.modes} height={130} />
+              <h2>Safety</h2>
+              <LineChart days={chart.days} series={chart.crime} height={130} />
               <h2>Social graph</h2>
               <LineChart days={chart.days} series={chart.ties} />
               <LineChart days={chart.days} series={chart.social} height={120} />

@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING
 from .clock import MINUTES_PER_DAY, SimTime
 from .faith import FAITHS, FESTIVAL_SERVICE
 from .people import (
-    EAT_HOME, EAT_OUT, HOME, PARK, SCHOOL, SHOP, SLEEP, SOCIAL, TRAVEL, WORK, WORSHIP,
+    EAT_HOME, EAT_OUT, HOME, JAIL, PARK, SCHOOL, SHOP, SLEEP, SOCIAL, TRAVEL, WORK, WORSHIP,
     Person, Plan, urgency,
 )
 
@@ -86,6 +86,13 @@ class Brain:
             p.trip = None
             self._start(p, plan.activity, plan.place, max(t + 10, plan.until), t)
             return
+
+        if p.jailed_until > t:  # serving a sentence
+            p.activity, p.until = JAIL, p.jailed_until
+            w.schedule(p)
+            return
+        if p.activity == JAIL:
+            w.emit("released", f"{p.name} was released from jail and went home.", (p.id,))
 
         hh = w.households[p.household]
         home = hh.home

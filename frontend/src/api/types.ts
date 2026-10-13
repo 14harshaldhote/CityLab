@@ -53,6 +53,7 @@ export interface CityMap {
   name: string;
   transit?: { lines: BusLine[]; stops: BusStop[] };
   wide?: [number, number][];
+  cameras?: Camera[];
   widening?: [number, number][];
   version?: number;
   plots?: Plot[];
@@ -90,6 +91,8 @@ export interface Frame {
   move?: number[]; // 0 not travelling, 1 walking, 2 driving, 3 on a bus, 4 in an auto, 5 waiting
   buses?: [number, number, number, number, number, number][]; // id, x, y, heading, route, riders
   traffic?: [number, number, number][]; // corner, corner, how full (1 = jammed)
+  police?: [number, number, number, number][]; // id, x, y, heading
+  crimes?: [number, number, number, number, number][]; // x, y, minutes ago, kind (0 pickpocket, 1 shoplift, 2 burglary), solved
   city_version?: number;
   sites?: [number, number][];
   counts: Record<string, number>;
@@ -164,6 +167,8 @@ export interface PersonCard {
   place: string | null;
   heading_to: string | null;
   travel?: string | null;
+  convictions?: number;
+  in_jail_until?: string | null;
   until: string | null;
   friends: { id: number; name: string; strength: number }[];
   friend_count: number;
@@ -246,6 +251,15 @@ export interface DailyRow {
   late?: number;
   bus_riders?: number;
   worst_jam_kmh?: number | null;
+  crimes?: number;
+  crimes_reported?: number;
+  deterred?: number;
+  arrests?: number;
+  convicted?: number;
+  acquitted?: number;
+  stolen?: number;
+  cameras?: number;
+  in_jail?: number;
 }
 
 export interface Transport {
@@ -256,4 +270,43 @@ export interface Transport {
   history: DailyRow[];
   fares: { bus: number; auto_min: number; auto_per_km: number; petrol_per_km: number };
   widened: string[];
+}
+
+export interface Camera {
+  node: number;
+  x: number;
+  y: number;
+  name: string;
+}
+
+export interface CrimeCase {
+  id: number;
+  kind: string;
+  when: string;
+  day: number;
+  place: string;
+  building: number | null;
+  victim: string;
+  victim_id: number | null;
+  value: number;
+  evidence: number;
+  cctv: boolean;
+  witnesses: number;
+  status: string;
+  caught_in_the_act: boolean;
+  verdict: string;
+  hearing: string | null;
+  suspect: { id: number; name: string } | null;
+}
+
+export interface Safety {
+  today: { crimes_reported: number; arrests: number; deterred: number; convicted: number; acquitted: number };
+  month: { crimes: number; reported: number; solved: number; with_cctv: number; solved_with_cctv: number; stolen: number };
+  police: { on_duty: number; patrols: number; cameras: number };
+  cases: CrimeCase[];
+  court: CrimeCase[];
+  verdicts: CrimeCase[];
+  in_jail: { id: number; name: string; until: string }[];
+  cameras: Camera[];
+  history: DailyRow[];
 }
