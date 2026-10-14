@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
 from ..core import policy, reports
@@ -19,6 +20,13 @@ router = APIRouter(prefix="/api")
 
 def runner(request: Request) -> Runner:
     return request.app.state.runner
+
+
+def admin(request: Request, x_citylab_token: str = Header(default="")) -> None:
+    """Actions that wipe or rewrite the city need the owner's token, when one is set. Checked here in the app, never by the AI."""
+    token = runner(request).settings.admin_token
+    if token and not hmac.compare_digest(x_citylab_token.encode(), token.encode()):
+        raise HTTPException(401, "this needs the city's admin token")
 
 
 class Control(BaseModel):
@@ -38,6 +46,10 @@ class Lever(BaseModel):
 
 class WhatIf(Lever):
     days: int = Field(default=7)
+
+
+class Ask(BaseModel):
+    question: str = Field(min_length=1, max_length=300)
 
 
 class Reset(BaseModel):
@@ -106,7 +118,7 @@ def control(body: Control, request: Request) -> dict[str, Any]:
     return {"playing": r.playing, "speed": r.speed, "t": r.world.t}
 
 
-@router.post("/reset")
+@router.post("/reset", dependencies=[Depends(admin)])
 def reset(body: Reset, request: Request) -> dict[str, Any]:
     r = runner(request)
     r.reset(body.seed, body.population)
@@ -236,18 +248,18 @@ def travel(body: Travel, request: Request) -> dict[str, Any]:
     return runner(request).travel(body.t)
 
 
-@router.post("/rules")
+@router.post("/rules", dependencies=[Depends(admin)])
 def rules(body: Lever, request: Request) -> dict[str, Any]:
-    if body.lever not in policy.LEVERS:
-        raise HTTPException(422, "no such rule")
+    if not policy.valid(body.lever, body.value):
+        raise HTTPException(422, "no such rule, or a value outside its range")
     return runner(request).change(body.lever, body.value)
 
 
 @router.post("/whatif")
 def whatif(body: WhatIf, request: Request) -> dict[str, Any]:
     r = runner(request)
-    if body.lever not in policy.LEVERS:
-        raise HTTPException(422, "no such rule")
+    if not policy.valid(body.lever, body.value):
+        raise HTTPException(422, "no such rule, or a value outside its range")
     if body.days not in DAYS:
         raise HTTPException(422, f"days must be one of {DAYS}")
     with r.lock:
@@ -275,6 +287,17 @@ def city_reports(request: Request, by: str = Query("month", pattern="^(month|yea
     with r.lock:
         w = r.world
         return reports.reports(w.daily, w.government.finished, w.city.name, by)
+
+
+@router.post("/ask")
+def ask(body: Ask, request: Request) -> dict[str, Any]:
+    """Ask the city a question in plain words. Answered from its records, by the free local AI when it's running."""
+    return runner(request).asker.ask(body.question)
+
+
+@router.get("/ask/status")
+def ask_status(request: Request) -> dict[str, Any]:
+    return runner(request).asker.status()
 
 
 @router.websocket("/ws")

@@ -1,5 +1,5 @@
 import type { Network } from "../components/EgoGraph";
-import type { Agencies, CityReport, History, Safety, WhatIfJob, Transport, BuildingCard, CityEvent, Economy, CityMap, DailyRow, Frame, PersonCard, Summary } from "./types";
+import type { Agencies, Answer, AskStatus, CityReport, History, Safety, WhatIfJob, Transport, BuildingCard, CityEvent, Economy, CityMap, DailyRow, Frame, PersonCard, Summary } from "./types";
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(path);
@@ -7,8 +7,33 @@ async function get<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-async function post<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+const TOKEN_KEY = "citylab-admin-token";
+
+function savedToken(): string {
+  try {
+    return localStorage.getItem(TOKEN_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+async function post<T>(path: string, body: unknown, retry = true): Promise<T> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const token = savedToken();
+  if (token) headers["X-CityLab-Token"] = token;
+  const res = await fetch(path, { method: "POST", headers, body: JSON.stringify(body) });
+  if (res.status === 401 && retry) {
+    // the owner set an admin token for actions that wipe or rewrite the city
+    const given = window.prompt("This needs the city's admin token (CITYLAB_ADMIN_TOKEN):");
+    if (given) {
+      try {
+        localStorage.setItem(TOKEN_KEY, given);
+      } catch {
+        /* private mode: just use it once */
+      }
+      return post<T>(path, body, false);
+    }
+  }
   if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
   return res.json() as Promise<T>;
 }
@@ -31,6 +56,8 @@ export const api = {
   whatIf: (lever: string, value: number, days: number) => post<WhatIfJob>("/api/whatif", { lever, value, days }),
   whatIfJob: (id: number) => get<WhatIfJob>(`/api/whatif/${id}`),
   reports: (by: "month" | "year") => get<CityReport[]>(`/api/reports?by=${by}`),
+  ask: (question: string) => post<Answer>("/api/ask", { question }),
+  askStatus: () => get<AskStatus>("/api/ask/status"),
   daily: () => get<DailyRow[]>("/api/stats/daily"),
   control: (body: { playing?: boolean; speed?: number; advance_minutes?: number }) => post<{ playing: boolean; speed: number; t: number }>("/api/control", body),
   reset: (seed: number, population: number) => post<{ seed: number; population: number }>("/api/reset", { seed, population }),

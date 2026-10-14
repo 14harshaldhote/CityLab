@@ -389,3 +389,40 @@ export interface CityReport {
   trips_bus: number;
   opened: number;
 }
+
+export interface AskSource {
+  n: number;
+  id: number;
+  t: number;
+  when: string;
+  kind: string;
+  text: string;
+  people: { id: number; name: string }[];
+  place: { id: number; name: string } | null;
+  district: string | null;
+}
+
+export interface Answer {
+  question: string;
+  answer: string;
+  facts: string[];
+  sources: AskSource[];
+  mode: "ai" | "records";
+  model: string | null;
+  guard: { kind: string; where: "question" | "records" | "answer"; note: string } | null;
+  understood: { about: string[]; when: string | null; where: string[]; who: string[] };
+  seconds: number;
+}
+
+export interface AskStatus {
+  url: string;
+  running: boolean;
+  chat_model: string;
+  embed_model: string;
+  can_write: boolean;
+  can_embed: boolean;
+  records: number;
+  embedded: number;
+  blocked: Record<string, number>;
+  incidents: { at: string; kind: string; where: string; question: string; detail: string }[];
+}

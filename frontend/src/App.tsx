@@ -9,6 +9,7 @@ import EconomyPanel from "./components/EconomyPanel";
 import type { Network } from "./components/EgoGraph";
 import LineChart from "./components/LineChart";
 import PersonPanel from "./components/PersonPanel";
+import AskPanel, { type AskTurn } from "./components/AskPanel";
 import HistoryPanel from "./components/HistoryPanel";
 import RoadsPanel from "./components/RoadsPanel";
 import SafetyPanel from "./components/SafetyPanel";
@@ -17,7 +18,7 @@ import { advise } from "./engine/advisor";
 import { LEGEND_KINDS, ROOF } from "./engine/art";
 import { ACTIVITY_COLORS, hex } from "./engine/view";
 
-type Tab = "city" | "person" | "place" | "roads" | "safety" | "agencies" | "economy" | "history" | "records" | "charts";
+type Tab = "city" | "person" | "place" | "roads" | "safety" | "agencies" | "economy" | "history" | "ask" | "records" | "charts";
 
 function usePoll(fn: () => void, ms: number, deps: unknown[]) {
   useEffect(() => {
@@ -36,6 +37,7 @@ export default function App() {
   const frames = useRef<{ prev: Frame | null; next: Frame | null; at: number }>({ prev: null, next: null, at: 0 });
   const [summary, setSummary] = useState<Summary | null>(null);
   const [tab, setTab] = useState<Tab>("city");
+  const [askLog, setAskLog] = useState<AskTurn[]>([]);
   const [view, setView] = useState<"3d" | "map">("3d");
   const [personId, setPersonId] = useState<number | null>(null);
   const [buildingId, setBuildingId] = useState<number | null>(null);
@@ -229,7 +231,7 @@ export default function App() {
         </section>
         <aside>
           <nav className="tabs">
-            {(["city", "person", "place", "roads", "safety", "agencies", "economy", "history", "records", "charts"] as Tab[]).map((t) => (
+            {(["city", "person", "place", "roads", "safety", "agencies", "economy", "history", "ask", "records", "charts"] as Tab[]).map((t) => (
               <button key={t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>
                 {t[0].toUpperCase() + t.slice(1)}
               </button>
@@ -303,6 +305,7 @@ export default function App() {
           {tab === "place" && (building ? <BuildingPanel card={building} onPick={pickPerson} /> : <div className="card muted">Click a building on the map.</div>)}
           {tab === "roads" && (roads ? <RoadsPanel data={roads} /> : <div className="card muted">Counting the traffic...</div>)}
           {tab === "history" && <HistoryPanel onTravel={travel} />}
+          {tab === "ask" && <AskPanel log={askLog} setLog={setAskLog} onPickPerson={pickPerson} onPickBuilding={pickBuilding} onTravel={travel} />}
           {tab === "safety" &&
             (safety ? <SafetyPanel data={safety} onPick={pickPerson} onPickBuilding={pickBuilding} /> : <div className="card muted">Opening the case files...</div>)}
           {tab === "agencies" &&

@@ -12,7 +12,7 @@ from typing import Any
 
 from .clock import MINUTES_PER_DAY, SimTime
 
-SUMS = ("births", "deaths", "arrived", "left", "couples", "hired", "crimes", "arrests", "convicted", "stolen", "trips_bus", "trips_auto",
+SUMS = ("births", "deaths", "arrived", "left", "couples", "hired", "crimes", "crimes_reported", "arrests", "convicted", "stolen", "trips_bus", "trips_auto",
         "trips_car", "trips_walk", "late", "gdp", "tax")
 ENDS = ("population", "households", "employed", "unemployed", "median_balance", "city", "loans_outstanding", "in_debt", "in_jail", "cameras")
 
@@ -85,8 +85,9 @@ def story(rep: dict[str, Any], name: str, period: str) -> str:
         s.append(f"{_people(rep['opened'], 'new building', 'new buildings')} opened.")
     s.append(f"The city collected ₹{_n(rep['tax'])} in tax and ended with ₹{_n(rep['city'] or 0)} in its budget.")
     if rep["crimes"]:
-        s.append(f"Police recorded {_people(rep['crimes'], 'theft', 'thefts')} worth ₹{_n(rep['stolen'])}, made "
-                 f"{_people(rep['arrests'], 'arrest', 'arrests')}, and the court found {_people(rep['convicted'], 'person', 'people')} guilty.")
+        s.append(f"There {'was' if round(rep['crimes']) == 1 else 'were'} {_people(rep['crimes'], 'theft', 'thefts')} worth ₹{_n(rep['stolen'])} "
+                 f"({_n(rep['crimes_reported'])} reported to the police); police made {_people(rep['arrests'], 'arrest', 'arrests')}, "
+                 f"and the court found {_people(rep['convicted'], 'person', 'people')} guilty.")
     else:
         s.append("Not a single theft was recorded.")
     if rep["trips_bus"]:

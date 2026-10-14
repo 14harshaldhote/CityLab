@@ -17,6 +17,12 @@ class Settings:
     database_url: str = field(default_factory=lambda: _env("DATABASE_URL", ""))
     start_playing: bool = field(default_factory=lambda: _env("AUTOPLAY", "1") == "1")
     speed: float = field(default_factory=lambda: float(_env("SPEED", "10")))  # sim minutes per real second
+    # the free local AI (Ollama). Leave the URL empty to switch it off completely.
+    ollama_url: str = field(default_factory=lambda: _env("OLLAMA_URL", "http://localhost:11434"))
+    chat_model: str = field(default_factory=lambda: _env("OLLAMA_MODEL", "llama3.2:3b"))
+    embed_model: str = field(default_factory=lambda: _env("EMBED_MODEL", "nomic-embed-text"))
+    # set this to require the token for the actions that wipe or rewrite the city (new city, changing a rule)
+    admin_token: str = field(default_factory=lambda: _env("ADMIN_TOKEN", ""))
     cors_origins: tuple[str, ...] = field(
         default_factory=lambda: tuple(
             o.strip() for o in _env("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",") if o

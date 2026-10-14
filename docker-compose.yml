@@ -18,11 +18,30 @@ services:
     environment:
       CITYLAB_DATABASE_URL: postgresql://citylab:citylab@db:5432/citylab
       CITYLAB_CORS_ORIGINS: http://localhost:8080
+      # the free local AI for "Ask the city". Start it with: docker compose --profile ai up
+      CITYLAB_OLLAMA_URL: http://ollama:11434
     depends_on:
       db:
         condition: service_healthy
     ports:
       - "8000:8000"
+  # Optional, free and open source: runs the language model on your own computer.
+  ollama:
+    image: ollama/ollama
+    profiles: ["ai"]
+    volumes:
+      - citylab-models:/root/.ollama
+    ports:
+      - "11434:11434"
+  # downloads the two small models once (about 2 GB), then exits
+  ollama-models:
+    image: ollama/ollama
+    profiles: ["ai"]
+    depends_on:
+      - ollama
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["sh", "-c", "sleep 3 && ollama pull llama3.2:3b && ollama pull nomic-embed-text"]
   web:
     build: ./frontend
     depends_on:
@@ -32,3 +51,4 @@ services:
 
 volumes:
   citylab-db:
+  citylab-models:

@@ -52,6 +52,14 @@ def apply(world: Any, lever: str, value: float) -> None:
         setattr(world.policy, lever, float(value))
 
 
+def valid(lever: str, value: float) -> bool:
+    """Is this a real rule, set to a value inside the range the city offers?"""
+    if lever not in LEVERS:
+        return False
+    opts = LEVERS[lever]["options"]
+    return min(opts) <= float(value) <= max(opts)
+
+
 def describe(lever: str, v: float) -> str:
     """A lever's setting in words."""
     if lever in ("income_tax", "base_rate"):

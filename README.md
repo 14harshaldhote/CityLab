@@ -63,6 +63,16 @@ completely free and runs on your own computer.
     in, what it earned and how many thefts there were.
 14. **Switch to the flat map.** Press *Map* for a colourful, hand-drawn view where
     every dot is a person, coloured by what they're doing.
+15. **Ask the city anything.** Open the *Ask* tab and type a question in plain
+    words: "How many babies were born last week?", "Why were there thefts in
+    Shivaji Nagar?", "Which street has the worst traffic?", "Who is Neha
+    Gokhale?". The city looks it up in its diary and shows the records it used,
+    each with links to the people and places involved, and a *go there* button
+    that takes you back to that very moment.
+16. **Try to trick it.** Ask it to reveal its secret instructions, to "ignore
+    your rules", to pretend to be someone else, or to write you a poem. Its
+    shield catches the trick, tells you what it spotted, and answers only the
+    real question, if there was one.
 
 ![Kamalnagar at night](docs/images/city-night.png)
 
@@ -108,10 +118,29 @@ These are the same ideas that power modern games and AI, in plain words.
 * **Money can't leak.** Every rupee is always somewhere: in a person's account, a
   shop's till, the city's budget or the bank. When it moves, it leaves one place
   and arrives in another, just like a real bank's books.
-* **The city keeps a diary.** Every birth, wedding, new job, festival, loan and new building is
-  written down in plain English. Soon you'll be able to ask the city questions,
-  like "who are the busiest people in Phool Baug?", and an AI running on your own
-  computer will answer from that diary.
+* **The city keeps a diary, and can look things up in it.** Every birth, wedding,
+  new job, theft, festival, loan and new building is written down in plain
+  English. When you ask a question, the city works out what it's about, where
+  and when, does any counting itself (computers are better at sums than
+  chatbots), then finds the diary pages that fit best. With the free AI running,
+  it also finds pages that *mean* the same thing even when the words differ
+  ("burgled" and "thieves broke in"). The AI then writes the answer only from
+  those pages and numbers, and points to each page it used. This is called
+  **RAG**, retrieval-augmented generation, and it's how many company chatbots
+  answer from their own documents instead of making things up.
+* **An AI needs a shield.** A chatbot follows whatever text it is shown, so
+  anything it reads is a way to steer it. Kamalnagar guards against the five
+  classic tricks: *prompt exposure* (getting it to reveal its instructions),
+  *prompt injection* ("ignore your rules and..."), *jailbreaking* (role-play to
+  get round its rules), *prompt hijacking* (pulling it off its job, say to write
+  code or send data somewhere) and *prompt poisoning* (orders hidden inside the
+  pages it looks up). Tricky questions never reach the AI at all. Everything it
+  reads is fenced off and labelled as "data, not instructions", kept apart from
+  its real rules. Every answer is checked on the way out, and a bad one is
+  swapped for a plain answer from the records. The AI can only write text: it
+  can't change a rule, rewind time or reset the city. Those actions are checked
+  by the app itself, and can be locked with a password. Every trick it stops is
+  counted on the shield, so you can see what people tried.
 * **The city can replay itself exactly.** Every midnight it saves a snapshot of
   itself. To go back to any moment, it loads the snapshot just before and plays
   the minutes in between, and because it follows its rules exactly, the replay
@@ -156,6 +185,8 @@ These are the same ideas that power modern games and AI, in plain words.
 
 ![What if the buses were free? Two cities, side by side](docs/images/city-what-if.png)
 
+![Asking the city about one of its people, with the records it used](docs/images/city-ask.png)
+
 ![Someone's life story](docs/images/person-card.png)
 
 ## Start it on your computer
@@ -168,6 +199,24 @@ docker compose up --build
 ```
 
 Then open <http://localhost:8080> in your browser. That's it.
+
+**Turn on the free AI (optional).** The *Ask* tab works straight away, answering
+from the city's records. For answers in its own words, start the city with a free,
+open-source language model that runs entirely on your computer (no account, no
+key, nothing sent anywhere):
+
+```bash
+docker compose --profile ai up --build
+```
+
+The first time, it downloads two small models (about 2 GB). Without Docker,
+install [Ollama](https://ollama.com), then run `ollama pull llama3.2:3b` and
+`ollama pull nomic-embed-text`, and the city finds it by itself. A laptop with
+8 GB of memory is enough.
+
+**Lock the big buttons (optional).** If other people can reach your city, set
+`CITYLAB_ADMIN_TOKEN` to a password of your choice. Starting a new city or
+changing a rule will then ask for it.
 
 <details>
 <summary>Without Docker, for tinkerers</summary>
@@ -192,14 +241,14 @@ set `CITYLAB_POPULATION`.
 
 ## Coming soon
 
-* Chatting with the city: ask it anything about its people and history.
 * AI-run city leaders who make decisions you can watch.
 
 ## Made with free tools
 
 The 3D city is drawn with [three.js](https://threejs.org/), the flat map with
 [PixiJS](https://pixijs.com/) and the charts with [D3](https://d3js.org/). The
-city itself runs on Python. Everything is free and open source, and nothing ever
+city itself runs on Python, and its optional AI runs on [Ollama](https://ollama.com)
+with open models such as Llama. Everything is free and open source, and nothing ever
 needs a paid account or an internet service.
 
 CityLab grew out of [LotusLab](https://github.com/14harshaldhote/LotusLab), a

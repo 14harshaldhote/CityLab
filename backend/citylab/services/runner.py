@@ -18,6 +18,8 @@ from ..config import Settings
 from ..core import policy
 from ..core.clock import MINUTES_PER_DAY, SimTime
 from ..core.world import World
+from ..ask.asker import Asker
+from ..ask.llm import LocalAI
 from ..storage.memory import MemoryStore
 from .history import History
 from .whatif import WhatIfs
@@ -40,6 +42,12 @@ class Runner:
         self.last_step_s = 0.0
         self.whatifs = WhatIfs()
         self.reset(settings.seed, settings.population)
+        try:
+            ai = LocalAI(settings.ollama_url, settings.chat_model, settings.embed_model)
+        except ValueError as exc:  # a bad address switches the AI off rather than stopping the city
+            log.warning("%s; answering from the records only", exc)
+            ai = LocalAI("", settings.chat_model, settings.embed_model)
+        self.asker = Asker(self, ai)
 
     def reset(self, seed: int, population: int) -> None:
         with self.lock:
@@ -136,11 +144,13 @@ class Runner:
 
     async def start(self) -> None:
         self._task = asyncio.create_task(self._loop())
+        self.asker.start()
 
     async def stop(self) -> None:
         if self._task:
             self._task.cancel()
         self.whatifs.cancel_running()
+        self.asker.stop()
         if self.pg is not None:
             self.pg.close()
 
