@@ -26,10 +26,11 @@ from typing import TYPE_CHECKING, Any
 
 from ..core import policy, reports
 from ..core.clock import MINUTES_PER_DAY, SimTime
+from ..core.mind import TOPIC_WORDS
 from ..core.people import ACTIVITY_NAMES
-from . import guard
+from . import figures, guard
 from .llm import LocalAI
-from .search import Index, blend
+from .search import Index, blend, tokens
 from .understand import Question, understand
 
 if TYPE_CHECKING:
@@ -79,6 +80,14 @@ def _was(n: int) -> str:
 
 def _of(n: int, one: str, many: str) -> str:
     return f"{n} {one if n == 1 else many}"
+
+
+# words in a question that ask what someone thinks about one of the things people hold views on
+ASKED_TOPICS = {
+    "taxes": ("tax", "taxes", "taxpayer", "taxpayers"), "police": ("police", "policing", "security"),
+    "hospital": ("hospital", "doctor", "doctors", "health"), "buses": ("bus", "buses", "transport", "fare"),
+    "jobs": ("job", "jobs", "work", "employment"), "council": ("council", "municipality", "government", "mayor"),
+}
 
 
 class Asker:
@@ -160,13 +169,13 @@ class Asker:
         with r.lock:  # reading only: asking never changes the city
             w = r.world
             now, upto = w.t, w.bus.count
-            names = self._names(w)
-            q = understand(asked, now, list(w.city.to_dict()["districts"]), names)
+            names, firsts = self._names(w)
+            q = understand(asked, now, list(w.city.to_dict()["districts"]), names, firsts)
             q.text = text
             if attack:  # a faith-and-crime question stays one, even with the attack cut out of it
                 q.faith_and_crime = q.faith_and_crime or understand(text, now, [], {}).faith_and_crime
             self.index.sync(r.store.events)
-            if attack and not (q.kinds or q.people or q.districts or q.window):
+            if attack and not (q.kinds or q.subjects or q.people or q.districts or q.window):
                 facts, extra, sources = [], [], []
             else:
                 facts, extra = self._facts(q, w, now, upto)
@@ -209,16 +218,21 @@ class Asker:
             "mode": mode,
             "model": status["chat_model"] if mode == "ai" else None,
             "guard": decided,
-            "understood": {"about": q.kinds, "when": q.window or None, "where": q.districts, "who": who},
+            "understood": {"about": q.kinds + [x for x in q.subjects if x not in q.kinds], "when": q.window or None, "where": q.districts,
+                           "who": [f"everyone called {q.called} ({len(q.people)})"] if q.called and len(q.people) > 3 else who,
+                           "spelling": q.corrected},
             "seconds": round(time.perf_counter() - t0, 2),
         }
 
     @staticmethod
-    def _names(w: Any) -> dict[str, list[int]]:
-        out: dict[str, list[int]] = {}
+    def _names(w: Any) -> tuple[dict[str, list[int]], dict[str, list[int]]]:
+        full: dict[str, list[int]] = {}
+        first: dict[str, list[int]] = {}
         for p in w.people.values():
-            out.setdefault(p.name.lower(), []).append(p.id)
-        return out
+            if p.alive:
+                full.setdefault(p.name.lower(), []).append(p.id)
+                first.setdefault(p.first.lower(), []).append(p.id)
+        return full, first
 
     # ---- exact numbers ----------------------------------------------------------------------
 
@@ -268,15 +282,27 @@ class Asker:
 
         if len(q.people) > 1:
             named = sorted({w.people[i].name for i in q.people if i in w.people})
-            if len(named) == 1:
+            if q.called:
+                facts.append(f"There are {len(q.people)} people called {q.called} in Kamalnagar; give a surname to ask about one of them.")
+            elif len(named) == 1:
                 facts.append(f"There are {len(q.people)} people called {named[0]} in Kamalnagar.")
-        for pid in q.people[:3]:
-            facts.append(self._profile(w, pid, now))
+        asked = [k for k, words in ASKED_TOPICS.items() if set(words) & set(q.words)]
+        if len(q.people) <= 3 and "friends" in q.subjects:
+            pass  # their friends are the answer, not their life story
+        elif len(q.people) <= 3:
+            for pid in q.people:
+                facts.append(self._profile(w, pid, now, asked))
+        elif not (q.called and (q.subjects or q.kinds)):  # "police action on Neha" is about all the Nehas, not a list of them
+            known = sorted((w.people[i] for i in q.people if i in w.people and w.people[i].alive), key=lambda p: (-p.fame, p.id))
+            facts.append("Some of them: " + "; ".join(self._brief(w, p, now) for p in known[:6]) + ".")
+        if q.people and ("police" in q.subjects or {"crime", "arrest", "court"} & set(q.kinds)):
+            facts.extend(figures.people_and_police(w, q.people, q.called, upto, self.r.store.events))
+        facts.extend(self._subjects(q, w, upto))
 
         if "weather" in q.kinds:
             facts.extend(self._weather(q, w, now))
 
-        counted = [k for k in q.kinds if k in DAILY]
+        counted = [k for k in q.kinds if k in DAILY and not (q.people and k in ("crime", "arrest", "court"))]
         for kind in counted[:3]:
             _, one, many = DAILY[kind]
             n = self._count(q, w, now, upto, kind)
@@ -332,6 +358,85 @@ class Asker:
                 extra.extend([hits[-1], hits[0]])
         return facts, extra
 
+    def _subjects(self, q: Question, w: Any, upto: int) -> list[str]:
+        """Figures on the subjects the question is about, in the order they were asked."""
+        subj = set(q.subjects)
+        words = set(q.words)
+        events = self.r.store.events
+        groups = [g for g in q.groups if not (g == "doctors" and not ({"happiness", "feelings", "opinions"} & subj))
+                  and not (g == "police" and "opinions" in subj and "officers" not in words)]
+        why = q.intent == "why" or "why" in words
+        out: list[str] = []
+        if "whatif" in subj:
+            return figures.whatif(w, q.words)
+        if "trend" in subj:
+            out += figures.trend(w)
+        if "budget" in subj and "tax" not in subj and not q.people:
+            text = " ".join(q.words)
+            out += figures.runway(w) if any(x in text for x in ("running out", "out of money", "broke", "bankrupt", "afford", "deficit")) else []
+            out += figures.budget(w)
+        if "tax" in subj or "tax_audit" in q.kinds:
+            if "happiness" in subj:
+                out += figures.happiness(w, taxpayers=True)
+            else:
+                if {"business", "businesses", "company", "companies", "shop", "shops", "which"} & words:
+                    out += figures.dodgers(w)
+                out += figures.tax(w)
+        elif "happiness" in subj and not q.extreme:
+            if q.districts:
+                claim = ("less" if {"less", "unhappy", "unhappier", "sadder", "worse", "least"} & words else
+                         "more" if {"more", "happier", "most", "better"} & words else "")
+                out += figures.happiness_where(w, q.districts, why, claim if why else "")
+            elif groups:
+                out += figures.by_group(w, groups, "happiness")
+            else:
+                out += figures.happiness(w)
+        if "feelings" in subj and not q.people:
+            if q.extreme and ({"neighbourhood", "neighborhood", "area", "district", "part"} & words):
+                out += figures.happiness(w)  # names the happiest and least happy neighbourhoods
+            elif q.extreme:
+                out += figures.extremes(w, q.extreme, events)
+            elif groups:
+                out += figures.by_group(w, groups, "feelings")
+            else:
+                out += figures.feelings(w)
+        if "opinions" in subj and not q.people:
+            out += figures.by_group(w, groups, "opinions") if groups else figures.opinions(w)
+        about_doctors = "doctors" in groups  # "how happy are doctors" is about them as people, not the hospital
+        if ("health" in subj or {"treated", "sick"} & set(q.kinds)) and not about_doctors:
+            general = figures.health(w, behaviour="behave" in " ".join(q.words) or "behaviour" in q.words or "change" in q.words or q.intent == "how")
+            specific: list[str] = []
+            if {"mistake", "mistakes", "wrong", "misdiagnosis", "misdiagnosed", "error", "errors"} & words:
+                specific += figures.doctor_mistakes(w)
+            if {"fair", "unfair", "poor", "free", "afford", "rich", "money"} & words:
+                specific += figures.fairness(w)
+            if {"night", "morning", "evening", "afternoon", "time", "hour", "hours", "wait", "waiting"} & words:
+                specific += figures.hospital_hours(w)
+            out += specific + general[:2] if specific else general
+        crime_q = "police" in subj or {"crime", "arrest", "cctv"} & set(q.kinds)
+        if "police" in subj and not q.people:
+            out += figures.police(w)
+        if crime_q and not q.people and ({"neighbourhood", "neighborhood", "area", "district", "where", "most", "worst"} & words) and not q.districts:
+            out += figures.theft_by_district(w)
+        if crime_q and ({"cctv", "camera", "cameras"} & words):
+            out += figures.cctv(w)
+        if "plans" in subj and "failed" not in subj:
+            out += figures.plans(w)
+        if "failed" in subj and not ("health" in subj and "plans" not in subj):
+            out += figures.failures(w, events)
+        if "rich" in subj:
+            out += figures.rich(w)
+        if "story" in subj:
+            out += figures.story(w)
+        if "council" in subj and "opinions" not in subj:
+            out += figures.council(w)
+        if "friends" in subj and 0 < len(q.people) <= 3:
+            for pid in q.people:
+                if len(q.people) > 1:
+                    out.append(self._brief(w, w.people[pid], w.t) + ".")
+                out += figures.friends_of(w, pid)
+        return out
+
     def _count(self, q: Question, w: Any, now: int, upto: int, kind: str) -> int:
         """Exactly how many, from the daily books (or the diary itself when the question is about a place or a person)."""
         key = DAILY[kind][0]
@@ -343,7 +448,18 @@ class Asker:
             n += len(self._matching(today, w, upto, [kind]))
         return n
 
-    def _profile(self, w: Any, pid: int, now: int) -> str:
+    @staticmethod
+    def _brief(w: Any, p: Any, now: int) -> str:
+        district = w.city.buildings[w.households[p.household].home].district
+        age = p.age(now)
+        doing = (f"works at {w.city.buildings[p.job.building].name}" if p.job is not None else "is retired" if p.retired
+                 else "is at school" if p.school is not None else "is a small child" if age < 6 else "is looking for work" if age >= 18
+                 else "is a child")
+        known = p.known_for
+        fame = "" if not known else f", {known}" if known.startswith(("a ", "known")) else f", who {known}"
+        return f"{p.name}, {int(p.age(now))}, of {district}, {doing}{fame}"
+
+    def _profile(self, w: Any, pid: int, now: int, asked: list[str] | tuple[str, ...] = ()) -> str:
         p = w.people[pid]
         if not p.alive:
             return f"{p.name} is no longer in the city."
@@ -369,6 +485,20 @@ class Asker:
         s.append(f"Right now: {ACTIVITY_NAMES[p.activity]}" + (f" at {card['place']}." if card.get("place") else "."))
         if card.get("convictions"):
             s.append(f"They have been found guilty of theft {card['convictions']} {'time' if card['convictions'] == 1 else 'times'}.")
+        if card.get("illness"):
+            ill = card["illness"]
+            s.append(f"They have {ill['what']} ({ill['how']})" + (", and have seen a doctor." if ill["seen_doctor"] else "."))
+        mind = card["mind"]
+        s.append(f"Lately they feel {mind['feeling']}; their life satisfaction is {card['happiness'] * 100:.0f} out of 100.")
+        for k in asked:  # what they think about the thing the question asked about, whatever it is
+            v = mind["opinions"].get(k, 0.0)
+            s.append(f"On {TOPIC_WORDS[k]} they are {figures.opinion_word(v)} it ({figures.score10(v)} out of 10).")
+        views = [kv for kv in sorted(mind["opinions"].items(), key=lambda kv: -abs(kv[1])) if kv[0] not in asked][:2]
+        if views and abs(views[0][1]) >= 0.15:
+            s.append("They are " + " and ".join(f"{figures.opinion_word(v)} {TOPIC_WORDS[k]}" for k, v in views if abs(v) >= 0.15) + ".")
+        if mind["known_for"]:
+            s.append(f"Around town they're known as someone who {mind['known_for']}." if not mind["known_for"].startswith("a ")
+                     else f"Around town they're known as {mind['known_for']}.")
         return " ".join(s)
 
     def _weather(self, q: Question, w: Any, now: int) -> list[str]:
@@ -428,7 +558,13 @@ class Asker:
     def _records(self, q: Question, w: Any, upto: int, extra: list[Any], k: int = 6) -> list[dict[str, Any]]:
         idx = self.index
         events = self.r.store.events
-        kinds = set(q.kinds) - {"report", "policy"} if q.kinds else None
+        related = set(q.kinds) | {k for x in q.subjects for k in figures.SUBJECT_KINDS.get(x, ())}
+        kinds = related - ({"report", "policy"} if q.kinds and not q.subjects else set()) if related else None
+        understood = bool(q.kinds or q.subjects or q.people or q.districts or q.window)
+        about_group = q.groups and set(q.subjects) <= {"opinions", "happiness", "feelings", "council", "health"}
+        if (q.subjects and not related or about_group) and not (q.people or q.districts or q.window):
+            # a question answered wholly by worked-out figures (the richest, how people feel): diary entries would only distract
+            return [self._source(w, n + 1, e) for n, e in enumerate(extra[:k])]
 
         def allowed(doc: int, strict: bool = True) -> bool:
             e = events[idx.store_pos[doc]]
@@ -444,11 +580,18 @@ class Asker:
                 return False
             return True
 
-        words = idx.by_words(q.text, allowed, k=20)
+        query = " ".join(q.words)  # with spelling slips already forgiven
+        words = idx.by_words(query, allowed, k=20)
+        if not understood:
+            # an open question: only show records that match most of what was asked, not just one shared word
+            asked = set(tokens(query))
+            words = [(d, sc) for d, sc in words if asked and len(asked & set(tokens(events[idx.store_pos[d]].text))) >= max(2, len(asked) / 2)]
         meaning: list[tuple[int, float]] = []
         if idx.embedded:
             try:
-                meaning = idx.by_meaning(self.ai.embed([q.text])[0], allowed, k=20)
+                meaning = idx.by_meaning(self.ai.embed([query])[0], allowed, k=20)
+                if not understood:
+                    meaning = [(d, sc) for d, sc in meaning if sc >= 0.6]
             except Exception:
                 meaning = []
         docs = blend(words, meaning, k)
@@ -463,7 +606,7 @@ class Asker:
             if e.id not in picked:
                 chosen.append(e)
                 picked.append(e.id)
-        if len(chosen) < 3 and (q.window or q.people or q.districts or q.kinds):
+        if len(chosen) < 3 and understood:
             # nothing matched the words: show the most notable records that fit the question's who, where and when
             pool = self._matching(q, w, upto, sorted(kinds) if kinds else None)
             pool = [e for e in pool if e.id not in picked and (kinds or WEIGHT.get(e.kind, 1) > 0)]
@@ -497,10 +640,11 @@ class Asker:
         if facts:
             out = " ".join(facts)
         elif sources:
-            out = "I couldn't work out an exact answer to that, but these records look closest."
+            out = "I have no exact figure for that, only these diary entries that match your words closely."
         else:
-            return ("I couldn't find anything about that in the city's records. Try asking about births, thefts, traffic, buses, jobs, the "
-                    "weather, a neighbourhood like Shivaji Nagar, or someone by their full name.")
+            return ("I don't know: the city keeps no records on that. Try asking about its people (by name), births, jobs, thefts and the "
+                    "police, traffic and buses, the hospital and its doctors, the budget and taxes, happiness and what people think, the "
+                    "council's plans, the weather, or a neighbourhood like Shivaji Nagar.")
         if sources:
             out += "" if not facts else f" The most relevant record{'s are' if len(sources) > 1 else ' is'} below."
         return out

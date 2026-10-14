@@ -118,7 +118,7 @@ def test_a_person_and_the_weather(runner):
 
 def test_nonsense_gets_an_honest_answer(runner):
     a = runner.asker.ask("zzkq vvbn")
-    assert a["sources"] == [] and "couldn't find anything" in a["answer"]
+    assert a["sources"] == [] and a["answer"].startswith("I don't know")
 
 
 # ---- the free local AI, played by a stand-in -------------------------------------------------
@@ -197,3 +197,40 @@ def test_without_the_local_ai_the_api_still_answers():
         a = c.post("/api/ask", json={"question": "What happened yesterday?"}).json()
         assert a["mode"] == "records" and a["answer"] and a["understood"]["when"] == "yesterday"
         assert c.post("/api/ask", json={"question": ""}).status_code == 422
+
+
+# ---- harder questions: spelling slips, first names, groups, comparisons, what-ifs ---------------
+
+
+def test_forgives_spelling_and_knows_first_names():
+    q = understand("What is the mulicaplity development status and upcoming panning?", 0, DISTRICTS, {}, {})
+    assert "plans" in q.subjects and q.corrected.get("mulicaplity") == "municipality"
+    q = understand("How many police action taken on Neha?", 0, DISTRICTS, {"neha pandey": [3], "neha bose": [7]}, {"neha": [3, 7]})
+    assert q.people == [3, 7] and q.called == "Neha" and "police" in q.subjects
+    q = understand("What do unemployed people think about the council?", 0, DISTRICTS, {}, {})
+    assert q.groups == ["unemployed"] and "opinions" in q.subjects
+    q = understand("Who is the angriest person in the city?", 0, DISTRICTS, {}, {})
+    assert q.extreme == "anger"
+
+
+@pytest.mark.parametrize("question, expect", [
+    ("Who is the angriest person in the city?", "The angriest people"),
+    ("What would happen if income tax went up to 25%?", "What-if tab"),
+    ("Is the city running out of money?", "a day"),
+    ("What do unemployed people think about the council?", "people looking for work"),
+    ("Compare happiness in Shivaji Nagar and Kamal Chowk", "Shivaji Nagar: happiness"),
+    ("How has the city changed since the first week?", "Comparing the first"),
+    ("What are the stats on doctors?", "doctors"),
+    ("How many and who doesn't pay tax, and the damage cost on others?", "cash in hand"),
+    ("What is the happiness index?", "happiness index"),
+    ("Who is the celebrity or most richest person?", "richest people"),
+    ("What is the price of gold in Mumbai?", "I don't know"),
+])
+def test_answers_harder_questions_from_the_citys_own_figures(runner, question, expect):
+    a = runner.asker.ask(question)
+    assert expect in a["answer"], a["answer"]
+
+
+def test_what_if_never_guesses_numbers(runner):
+    a = runner.asker.ask("What would happen if income tax went up to 25%?")
+    assert "won't guess" in a["answer"]

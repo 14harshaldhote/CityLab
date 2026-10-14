@@ -92,6 +92,7 @@ export const PEOPLE = [
   0x26201c, // travelling
   0x149c8f, // at a place of worship
   0x6b6f7a, // in jail
+  0xd4413f, // at the hospital
 ];
 
 export const LEGEND_KINDS: [string, string][] = [

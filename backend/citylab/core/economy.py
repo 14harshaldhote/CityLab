@@ -28,6 +28,14 @@ Once a day (``end_of_day``):
    priests and caretakers, and spend what is left on festivals, upkeep and charity.
    The gurudwara's free kitchen (langar) feeds everyone who comes.
 7. **Companies** that run out of money borrow or lay people off.
+
+**Tax dodging.** Not everyone pays what they owe. Some shops, restaurants and
+building sites pay part of their staff cash in hand, with no income tax withheld,
+and some shops and restaurants only declare part of their takings. The higher the
+income tax, the more tempting it is. Every rupee dodged is a rupee the city
+doesn't have for schools, the hospital, police and buses, so honest taxpayers
+carry more of the load. The Municipal Tax Office audits a few businesses every
+week; those caught pay the tax they dodged plus a 50% fine, and clean up their books.
 """
 
 from __future__ import annotations
@@ -63,6 +71,11 @@ MEAL_OUT = 22.0
 WHOLESALE_SHARE = 0.4  # what a shop pays the outside world for the goods it sells
 UPKEEP_SHARE = 0.35  # what the landlord spends on upkeep
 OUTPUT_PER_WAGE = 1.4
+CASH_JOBS = {"shop": 0.2, "restaurant": 0.25, "construction": 0.35}  # share of hires paid cash in hand at 15% income tax
+CASH_BOOKS = 0.15  # share of shops and restaurants that only declare part of their takings
+DECLARED = 0.5  # the part they declare
+AUDITS_PER_WEEK = 4
+FINE = 0.5
 LANGAR_MEAL = 8.0  # what the gurudwara's free kitchen spends per meal  # how much an average worker's day sells for, relative to their wage
 
 
@@ -94,6 +107,12 @@ class Economy:
         self.company_sales: dict[int, float] = defaultdict(float)  # today's revenue by building
         self.history: dict[str, list[float]] = defaultdict(list)
         self.total0 = 0.0
+        # tax dodging
+        self.cash_books: set[str] = set()  # companies declaring only part of their takings
+        self.dodged: dict[str, float] = defaultdict(float)  # company -> tax dodged since its last audit
+        self.dodged_today = 0.0
+        self.city_in: dict[str, float] = defaultdict(float)  # today's money into and out of the city budget, by purpose
+        self.city_out: dict[str, float] = defaultdict(float)
 
     # ---- accounts -------------------------------------------------------------------
 
@@ -117,6 +136,10 @@ class Economy:
         self.balance[src] = round(self.balance[src] - amount, 2)
         self.balance[dst] = round(self.balance[dst] + amount, 2)
         self.flows[purpose] += amount
+        if src == "city":
+            self.city_out[purpose] += amount
+        elif dst == "city":
+            self.city_in[purpose] += amount
         return amount
 
     def total(self) -> float:
@@ -133,6 +156,7 @@ class Economy:
             if b.jobs and b.kind not in PUBLIC and b.kind not in OWN_PAYER:
                 self._seed(self.company(b.id), 3000.0 * len(b.jobs) * float(rng.uniform(0.6, 1.4)))
                 self.credit[self.company(b.id)] = 650.0
+                self.new_books(b)
         for p in self.w.alive():
             self.open(p, founding=True)
         self.total0 = self.total()
@@ -178,6 +202,63 @@ class Economy:
                 self.transfer(acct, dst, left, "inheritance" if dst == "city" else "money leaving the city")
         elif left < 0:
             self.transfer("bank", acct, -left, "bad debt written off")
+
+    # ---- tax dodging -------------------------------------------------------------------
+
+    def offers_cash(self, b: Any) -> bool:
+        """Does this job pay cash in hand? More likely in small businesses, on building sites, and when tax is high."""
+        kind = "construction" if b.status == "construction" else b.kind
+        share = CASH_JOBS.get(kind, 0.0)
+        if not share:
+            return False
+        return bool(self.w.streams("tax").random() < share * (0.5 + 3.33 * self.w.policy.income_tax))
+
+    def new_books(self, b: Any) -> None:
+        if b.kind in RETAIL and self.w.streams("tax").random() < CASH_BOOKS:
+            self.cash_books.add(self.company(b.id))
+
+    def audit(self, rng: np.random.Generator) -> list[dict[str, Any]]:
+        """The Tax Office's weekly round: check a few businesses' books."""
+        w = self.w
+        firms = [b for b in w.city.buildings if b.jobs and b.kind not in PUBLIC and b.kind not in OWN_PAYER and b.kind not in TRUSTS]
+        if not firms:
+            return []
+        weights = np.array([3.0 if b.kind in RETAIL or b.status == "construction" else 1.0 for b in firms])
+        picks = rng.choice(len(firms), size=min(AUDITS_PER_WEEK, len(firms)), replace=False, p=weights / weights.sum())
+        out = []
+        for i in sorted(int(k) for k in picks):
+            b = firms[i]
+            acct = self.company(b.id)
+            cash_staff = [q for q in w.job_holders.get(b.id, []) if w.people[q].cash_job]
+            owed = round(self.dodged.get(acct, 0.0), 2)
+            if owed <= 0 and not cash_staff and acct not in self.cash_books:
+                out.append({"building": b.id, "name": b.name, "caught": False})
+                continue
+            payer = self.payer_for(b.id) if b.status == "open" else next(
+                (pr.account for pr in w.government.projects.values() if pr.building == b.id), acct)
+            paid = self.transfer(payer, "city", owed * (1 + FINE), "back taxes and fines")
+            self.dodged[acct] = 0.0
+            self.cash_books.discard(acct)
+            for q in cash_staff:
+                w.people[q].cash_job = False
+            out.append({"building": b.id, "name": b.name, "caught": True, "paid": paid, "cash_staff": len(cash_staff)})
+            staff = f"{len(cash_staff)} cash-in-hand {'worker' if len(cash_staff) == 1 else 'workers'}"
+            if owed >= 1:
+                text = (f"The Municipal Tax Office audited {b.name}: it had dodged ₹{owed:,.0f} in tax. It paid ₹{paid:,.0f} with a 50% fine"
+                        + (f", and put {staff} on the books." if cash_staff else "."))
+            else:
+                text = (f"The Municipal Tax Office audited {b.name} and caught it "
+                        + (f"paying {staff} off the books" if cash_staff else "keeping its takings off the books")
+                        + " before much tax was lost. It must declare everything from now on.")
+            w.emit("tax_audit", text, place=b.id, dodged=owed, paid=paid, cash_staff=len(cash_staff))
+        return out
+
+    def dodging(self) -> dict[str, Any]:
+        w = self.w
+        cash = [p for p in w.alive() if p.job is not None and p.cash_job]
+        payers = [p for p in w.alive() if p.job is not None and not p.cash_job]
+        return {"cash_workers": len(cash), "taxpayers": len(payers), "cash_books": len(self.cash_books),
+                "owed": round(sum(self.dodged.values()), 2)}
 
     # ---- spending during the day ------------------------------------------------------
 
@@ -227,9 +308,16 @@ class Economy:
         summary = self.summary()
         for k in ("money_people", "money_companies", "city", "loans_outstanding", "gdp"):
             self.history[k].append(summary[k])
+        summary["tax_dodged"] = round(self.dodged_today, 2)
+        summary["city_in"] = {k: round(v, 2) for k, v in sorted(self.city_in.items(), key=lambda kv: -kv[1])}
+        summary["city_out"] = {k: round(v, 2) for k, v in sorted(self.city_out.items(), key=lambda kv: -kv[1])}
+        summary.update({k: v for k, v in self.dodging().items() if k != "owed"})
         self.attendance = defaultdict(list)
         self.company_sales = defaultdict(float)
         self.flows = defaultdict(float)
+        self.city_in = defaultdict(float)
+        self.city_out = defaultdict(float)
+        self.dodged_today = 0.0
         assert abs(self.total() - self.total0) < 0.5, f"money leaked: {self.total() - self.total0} at {t}"
         return summary
 
@@ -243,6 +331,11 @@ class Economy:
                     continue
                 gross = p.job.wage
                 tax = round(gross * self.w.policy.income_tax, 2)
+                if p.cash_job and payer != "city":  # cash in hand: the worker gets it all and the tax is never paid
+                    self.transfer(payer, self.person(pid), gross, "wages paid cash in hand")
+                    self.dodged[self.company(bid)] += tax
+                    self.dodged_today += tax
+                    continue
                 self.transfer(payer, self.person(pid), gross - tax, "wages")
                 self.transfer(payer, "city", tax, "income tax")
 
@@ -311,7 +404,13 @@ class Economy:
     def _business_tax_and_dividends(self) -> None:
         w = self.w
         for bid in sorted(self.company_sales):
-            self.transfer(self.company(bid), "city", self.company_sales[bid] * BUSINESS_TAX, "business tax")
+            acct = self.company(bid)
+            due = self.company_sales[bid] * BUSINESS_TAX
+            if acct in self.cash_books:  # only part of the takings declared
+                self.dodged[acct] += due * (1 - DECLARED)
+                self.dodged_today += due * (1 - DECLARED)
+                due *= DECLARED
+            self.transfer(acct, "city", due, "business tax")
         for bid, holders in sorted(w.job_holders.items()):
             b = w.city.buildings[bid]
             if b.kind in PUBLIC or b.kind in OWN_PAYER or b.status != "open":

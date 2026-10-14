@@ -23,8 +23,9 @@ from typing import TYPE_CHECKING
 
 from .clock import MINUTES_PER_DAY, SimTime
 from .faith import FAITHS, FESTIVAL_SERVICE
+from .health import CHECKUP
 from .people import (
-    EAT_HOME, EAT_OUT, HOME, JAIL, PARK, SCHOOL, SHOP, SLEEP, SOCIAL, TRAVEL, WORK, WORSHIP,
+    EAT_HOME, EAT_OUT, HOME, HOSPITAL, JAIL, PARK, SCHOOL, SHOP, SLEEP, SOCIAL, TRAVEL, WORK, WORSHIP,
     Person, Plan, urgency,
 )
 
@@ -33,7 +34,8 @@ if TYPE_CHECKING:
 
 SCHOOL_START = 8 * 60
 SCHOOL_END = 15 * 60
-VISIT_KINDS = (WORK, SCHOOL, PARK, EAT_OUT, SHOP, SOCIAL, WORSHIP)
+VISIT_KINDS = (WORK, SCHOOL, PARK, EAT_OUT, SHOP, SOCIAL, WORSHIP, HOSPITAL)
+GOING_OUT = (EAT_OUT, SHOP, PARK, SOCIAL, WORSHIP)
 
 
 def is_workday(p: Person, day: int, weekdays_only: bool) -> bool:
@@ -169,6 +171,16 @@ class Brain:
         if worship is not None:
             options.append(worship)
 
+        # feeling ill: see a doctor if it calls for one, and rest rather than work
+        if p.illness is not None:
+            if w.health.needs_doctor(p) and 7 <= hour < 21:
+                hosp = w.nearest_open(here, "hospital", t)
+                if hosp is not None:
+                    options.append((5.0 + p.severity, HOSPITAL, hosp, t + 60))
+            if p.severity >= 2 or p.illness != CHECKUP:
+                options = [self._sick(p, o) for o in options]
+        options = [self._feel(p, o, wx.dark) for o in options]
+
         noise = self.rng.gumbel(0.0, 0.12, len(options))
         best = options[max(range(len(options)), key=lambda i: options[i][0] + noise[i])]
         _, activity, place, until = best
@@ -177,6 +189,29 @@ class Brain:
         elif activity == SCHOOL:
             p.last_school_day = day
         self._go(p, activity, place, until, t)
+
+    @staticmethod
+    def _sick(p: Person, o: tuple[float, int, int, int]) -> tuple[float, int, int, int]:
+        score, act, place, until = o
+        if act in (WORK, SCHOOL):
+            score *= 0.15 if p.severity >= 2 else 0.7
+        elif act in (SLEEP, HOME):
+            score += 0.4 * p.severity
+        elif act in GOING_OUT:
+            score -= 0.3 * p.severity
+        return score, act, place, until
+
+    @staticmethod
+    def _feel(p: Person, o: tuple[float, int, int, int], dark: bool) -> tuple[float, int, int, int]:
+        """Feelings tilt the choice: the sad seek company or comfort, the joyful go out, the anxious stay in after dark."""
+        score, act, place, until = o
+        if act in (SOCIAL, WORSHIP):
+            score += 0.6 * p.sadness
+        if act in (EAT_OUT, PARK, SHOP, SOCIAL):
+            score += 0.4 * (p.joy - 0.4)
+        if dark and act in GOING_OUT:
+            score -= 0.8 * p.fear
+        return score, act, place, until
 
     def _worship(self, p: Person, st: SimTime, here: int, t: int) -> tuple[float, int, int, int] | None:
         """A visit to their place of worship, if a service is on now and they have not been to it yet."""
@@ -224,6 +259,8 @@ class Brain:
         w.schedule(p)
 
     def _start(self, p: Person, activity: int, place: int, until: int, t: int) -> None:
+        if activity == HOSPITAL:
+            until = self.w.health.consult(p, place, t)
         p.activity = activity
         p.place = place
         p.until = max(until, t + 5)

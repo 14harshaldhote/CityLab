@@ -33,6 +33,7 @@ MAX_TIES = 40
 class SocialGraph:
     def __init__(self) -> None:
         self.g = nx.Graph()
+        self._top: dict[tuple[int, int, float], list[tuple[int, float]]] = {}  # top_friends answers until a tie changes
 
     def add_person(self, pid: int) -> None:
         self.g.add_node(pid)
@@ -40,10 +41,12 @@ class SocialGraph:
     def remove_person(self, pid: int) -> None:
         if pid in self.g:
             self.g.remove_node(pid)
+            self._top.clear()
 
     def tie(self, a: int, b: int, kind: str, strength: float = 1.0) -> None:
         if a == b:
             return
+        self._forget(a, b)
         if self.g.has_edge(a, b):
             e = self.g.edges[a, b]
             if kind in FAMILY_KINDS:
@@ -56,6 +59,7 @@ class SocialGraph:
         """Returns True when this created a new acquaintance."""
         if a == b:
             return False
+        self._forget(a, b)
         if self.g.has_edge(a, b):
             e = self.g.edges[a, b]
             e["w"] = min(1.0, e["w"] + gain)
@@ -73,18 +77,29 @@ class SocialGraph:
         out.sort(key=lambda x: (-x[1], x[0]))
         return out
 
+    def _forget(self, a: int, b: int) -> None:
+        if self._top:
+            for key in [key for key in self._top if key[0] == a or key[0] == b]:
+                del self._top[key]
+
     def top_friends(self, pid: int, k: int, min_strength: float = 0.0) -> list[tuple[int, float]]:
-        """The ``k`` strongest friendships, without sorting everyone."""
+        """The ``k`` strongest friendships, without sorting everyone (remembered until one of their ties changes)."""
+        key = (pid, k, min_strength)
+        hit = self._top.get(key)
+        if hit is not None:
+            return hit
         if pid not in self.g:
             return []
         items = ((d["w"], -v, v) for v, d in self.g[pid].items() if d["kind"] == "friend" and d["w"] >= min_strength)
-        return [(int(v), w) for w, _, v in heapq.nlargest(k, items)]
+        out = self._top[key] = [(int(v), w) for w, _, v in heapq.nlargest(k, items)]
+        return out
 
     def degree(self, pid: int) -> int:
         return self.g.degree(pid) if pid in self.g else 0
 
     def mix_day(self, rng: np.random.Generator, visits: dict[int, list[int]], sociability: dict[int, float]) -> int:
         """Apply one day of co-presence meetings. Returns the number of new acquaintances."""
+        self._top.clear()
         made = 0
         for place in sorted(visits):
             group = sorted(set(visits[place]))
@@ -107,6 +122,7 @@ class SocialGraph:
         return made
 
     def close_triads(self, rng: np.random.Generator, people: Iterable[int], chance: dict[int, float]) -> int:
+        self._top.clear()
         made = 0
         for p in people:
             if rng.random() >= chance.get(p, 0.0):
@@ -121,6 +137,7 @@ class SocialGraph:
         return made
 
     def fade(self) -> None:
+        self._top.clear()
         drop = []
         for a, b, d in self.g.edges(data=True):
             if d["kind"] == "friend":

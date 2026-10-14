@@ -50,6 +50,57 @@ function faithLine(card: PersonCard): string | null {
   return `Goes to ${place} ${how}.`;
 }
 
+const TOPICS: [string, string][] = [
+  ["taxes", "Taxes"],
+  ["police", "The police"],
+  ["hospital", "The hospital"],
+  ["buses", "The buses"],
+  ["jobs", "Finding work"],
+  ["council", "The council"],
+];
+
+function opinionWord(v: number): string {
+  return v < -0.5 ? "very unhappy" : v < -0.15 ? "unhappy" : v < 0.15 ? "fine" : v < 0.5 ? "happy" : "very happy";
+}
+
+function InnerLife({ card }: { card: PersonCard }) {
+  const mind = card.mind;
+  if (!mind || !card.alive) return null;
+  const f = mind.feelings;
+  return (
+    <>
+      <h3>Inner life · happiness {Math.round((card.happiness ?? 0) * 100)}</h3>
+      <p>
+        Feels <b>{mind.feeling}</b>.
+        {mind.known_for && ` Known around town as ${mind.known_for.startsWith("a ") || mind.known_for.startsWith("known") ? "" : "someone who "}${mind.known_for}.`}
+        {card.illness && ` Has ${card.illness.what} (${card.illness.how})${card.illness.seen_doctor ? ", seen a doctor" : ""}.`}
+        {card.cash_job && " Paid cash in hand, so no income tax is taken."}
+      </p>
+      <div className="cols">
+        <div>
+          <Bar label="joy" value={f.joy} />
+          <Bar label="sadness" value={f.sadness} />
+          <Bar label="anger" value={f.anger} />
+          <Bar label="fear" value={f.fear} />
+          <Bar label="thinks for self" value={mind.independence} />
+        </div>
+        <div>
+          {TOPICS.map(([k, label]) => (
+            <div className="bar" key={k} title={`${(5 + 5 * (mind.opinions[k] ?? 0)).toFixed(1)} out of 10`}>
+              <span>{label}</span>
+              <div>
+                <i style={{ width: `${Math.round(50 + 50 * (mind.opinions[k] ?? 0))}%` }} />
+              </div>
+              <b>{opinionWord(mind.opinions[k] ?? 0)}</b>
+            </div>
+          ))}
+        </div>
+      </div>
+      <p className="muted small">Feelings follow what happens to them and fade back to their nature. Opinions come from their own life, then from friends; the more independent they are, the less friends sway them.</p>
+    </>
+  );
+}
+
 export default function PersonPanel({ card, net, onPick }: { card: PersonCard; net: Network | null; onPick: (id: number) => void }) {
   return (
     <div className="card">
@@ -96,6 +147,8 @@ export default function PersonPanel({ card, net, onPick }: { card: PersonCard; n
           </>
         )}
       </p>
+
+      <InnerLife card={card} />
 
       <h3>Family</h3>
       <div className="people">

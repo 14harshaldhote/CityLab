@@ -20,9 +20,9 @@ from .routing import Trip
 NEEDS = ("hunger", "energy", "social", "fun")
 
 # activity codes, shared with the frontend (index = colour/legend)
-SLEEP, HOME, EAT_HOME, EAT_OUT, WORK, SCHOOL, SOCIAL, PARK, SHOP, TRAVEL, WORSHIP, JAIL = range(12)
+SLEEP, HOME, EAT_HOME, EAT_OUT, WORK, SCHOOL, SOCIAL, PARK, SHOP, TRAVEL, WORSHIP, JAIL, HOSPITAL = range(13)
 ACTIVITY_NAMES = ("sleeping", "at home", "eating at home", "eating out", "working", "at school", "visiting friends", "at the park",
-                  "shopping", "travelling", "at a place of worship", "in jail")
+                  "shopping", "travelling", "at a place of worship", "in jail", "at the hospital")
 
 # per-minute base drain, then per-activity additions (hunger, energy, social, fun)
 BASE_RATE = (-1 / 360, -1 / 1400, -1 / 1800, -1 / 800)
@@ -39,6 +39,7 @@ ACTIVITY_RATE: dict[int, tuple[float, float, float, float]] = {
     TRAVEL: (0.0, 0.0, 0.0, 0.0),
     WORSHIP: (0.0, 0.0, 1 / 150, 1 / 250),  # community and a little calm
     JAIL: (1 / 300, 1 / 2000, 0.0, -1 / 3000),  # fed and rested, but lonely and dull
+    HOSPITAL: (0.0, 0.0, 0.0, -1 / 1200),  # waiting rooms are no fun
 }
 
 
@@ -103,6 +104,25 @@ class Person:
     pending: Plan | None = None
     last_shift: int = -1  # absolute start minute of the last shift worked
     last_school_day: int = -1
+    # health (see health.py)
+    illness: str | None = None
+    severity: int = 0  # 0 well, 1 mild, 2 moderate, 3 serious
+    ill_since: int = 0
+    well_at: int = 0
+    wants_doctor: bool = False
+    seen_doctor: bool = False
+    happiness: float = 0.6  # life satisfaction, 0..1, worked out each night
+    # paid cash in hand, so no income tax is withheld (see economy.py)
+    cash_job: bool = False
+    # inner life (see mind.py): feelings 0..1, opinions -1..1, reputation
+    joy: float = 0.4
+    sadness: float = 0.1
+    anger: float = 0.05
+    fear: float = 0.05
+    opinions: dict[str, float] = field(default_factory=dict)
+    leanings: dict[str, float] = field(default_factory=dict)  # their own slant on each topic, whatever happens
+    fame: float = 0.0
+    known_for: str = ""
 
     @property
     def name(self) -> str:

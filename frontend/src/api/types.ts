@@ -175,6 +175,25 @@ export interface PersonCard {
   friend_count: number;
   money: { balance: number; credit_score: number; debt: number; loans: { balance: number; rate: number; instalment: number; missed: number }[] };
   life: CityEvent[];
+  illness?: { what: string; how: string; seen_doctor: boolean } | null;
+  happiness?: number;
+  cash_job?: boolean;
+  mind?: {
+    feelings: Record<"joy" | "sadness" | "anger" | "fear", number>;
+    feeling: string;
+    opinions: Record<string, number>;
+    independence: number;
+    fame: number;
+    known_for: string;
+  };
+}
+
+export interface Life {
+  happiness: { index?: number; parts?: Record<string, number>; districts?: Record<string, number>; groups?: Record<string, number | null> };
+  poll: { overall?: Record<string, number>; moods?: Record<string, number>; adults?: number; feelings?: Record<string, number> };
+  celebrities: { id: number; name: string; known_for: string; fame: number }[];
+  hospital: { sick: number; by_illness: Record<string, number>; month: { visits: number; wait: number | null; satisfaction: number | null; right: number | null; free: number } };
+  tax: { taxpayers: number; cash_workers: number; cash_books: number };
 }
 
 export interface BuildingCard extends Building {
@@ -261,6 +280,20 @@ export interface DailyRow {
   stolen?: number;
   cameras?: number;
   in_jail?: number;
+  sick?: number;
+  hospital_visits?: number;
+  hospital_wait?: number | null;
+  happiness?: number | null;
+  happiness_taxpayers?: number | null;
+  happiness_others?: number | null;
+  tax_dodged?: number;
+  cash_workers?: number;
+  view_taxes?: number;
+  view_police?: number;
+  view_hospital?: number;
+  view_buses?: number;
+  view_jobs?: number;
+  view_council?: number;
 }
 
 export interface Transport {

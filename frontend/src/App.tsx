@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, liveFrames } from "./api/client";
-import type { Agencies, Safety, Transport, BuildingCard, CityEvent, CityMap as City, DailyRow, Economy, Frame, PersonCard, Summary } from "./api/types";
+import type { Agencies, Life, Safety, Transport, BuildingCard, CityEvent, CityMap as City, DailyRow, Economy, Frame, PersonCard, Summary } from "./api/types";
 import AgenciesPanel from "./components/AgenciesPanel";
 import BuildingPanel from "./components/BuildingPanel";
 import City3D from "./components/City3D";
@@ -51,6 +51,7 @@ export default function App() {
   const [agencies, setAgencies] = useState<Agencies | null>(null);
   const [roads, setRoads] = useState<Transport | null>(null);
   const [safety, setSafety] = useState<Safety | null>(null);
+  const [life, setLife] = useState<Life | null>(null);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<{ id: number; name: string; age: number; activity: string | null }[]>([]);
 
@@ -86,6 +87,7 @@ export default function App() {
   usePoll(() => tab === "agencies" && api.agencies().then(setAgencies, () => undefined), 2500, [tab]);
   usePoll(() => tab === "roads" && api.transport().then(setRoads, () => undefined), 2000, [tab]);
   usePoll(() => tab === "safety" && api.safety().then(setSafety, () => undefined), 2500, [tab]);
+  usePoll(() => tab === "city" && api.life().then(setLife, () => undefined), 5000, [tab]);
   usePoll(() => (tab === "charts" || tab === "city") && api.daily().then(setDaily, () => undefined), 5000, [tab]);
   const tips = useMemo(() => advise(summary, econ, daily), [summary, econ, daily]);
 
@@ -140,6 +142,25 @@ export default function App() {
         { label: "arrests", color: "#2c7fb8", values: daily.map((d) => d.arrests ?? 0) },
         { label: "found guilty", color: "#8a4fc6", values: daily.map((d) => d.convicted ?? 0) },
       ],
+      mood: [
+        { label: "happiness index", color: "#2f9a52", values: daily.map((d) => d.happiness ?? 0) },
+        { label: "taxpayers", color: "#2c7fb8", values: daily.map((d) => d.happiness_taxpayers ?? 0) },
+        { label: "everyone else", color: "#c9971a", values: daily.map((d) => d.happiness_others ?? 0) },
+      ],
+      views: [
+        { label: "taxes", color: "#2c7fb8", values: daily.map((d) => d.view_taxes ?? 0) },
+        { label: "police", color: "#5b6c9e", values: daily.map((d) => d.view_police ?? 0) },
+        { label: "hospital", color: "#d4413f", values: daily.map((d) => d.view_hospital ?? 0) },
+        { label: "buses", color: "#e0a03c", values: daily.map((d) => d.view_buses ?? 0) },
+        { label: "finding work", color: "#2f9a52", values: daily.map((d) => d.view_jobs ?? 0) },
+        { label: "council", color: "#8a4fc6", values: daily.map((d) => d.view_council ?? 0) },
+      ],
+      health: [
+        { label: "ill", color: "#d4413f", values: daily.map((d) => d.sick ?? 0) },
+        { label: "doctor visits", color: "#2c7fb8", values: daily.map((d) => d.hospital_visits ?? 0) },
+        { label: "average wait (minutes)", color: "#8a8f98", values: daily.map((d) => d.hospital_wait ?? 0) },
+      ],
+      dodged: [{ label: "tax dodged per day", color: "#b3261e", values: daily.map((d) => d.tax_dodged ?? 0) }],
       budget: [
         { label: "city budget", color: "#2c7fb8", values: daily.map((d) => d.city) },
         { label: "loans outstanding", color: "#d9480f", values: daily.map((d) => d.loans_outstanding) },
@@ -275,6 +296,37 @@ export default function App() {
                   has {summary.social.avg_ties} ties on average. Last step took {summary.step_ms} ms.
                 </p>
               )}
+              {life?.happiness.index != null && (
+                <>
+                  <h3>How the city feels · happiness {Math.round(life.happiness.index)}</h3>
+                  {life.poll.moods && life.poll.adults ? (
+                    <p className="muted small">
+                      {Object.entries(life.poll.moods)
+                        .map(([k, n]) => `${Math.round((100 * n) / (life.poll.adults || 1))}% ${k}`)
+                        .join(" · ")}
+                    </p>
+                  ) : null}
+                  {life.poll.overall && (
+                    <p className="muted small">
+                      Out of 10: taxes {life.poll.overall.taxes} · police {life.poll.overall.police} · hospital {life.poll.overall.hospital} · buses {life.poll.overall.buses} · finding work{" "}
+                      {life.poll.overall.jobs} · council {life.poll.overall.council}
+                    </p>
+                  )}
+                  <p className="muted small">
+                    {life.hospital.sick} ill · {life.hospital.month.visits} doctor visits this month · {life.tax.cash_workers} paid cash in hand
+                  </p>
+                  {life.celebrities.length > 0 && (
+                    <div className="people">
+                      Best known:{" "}
+                      {life.celebrities.map((c) => (
+                        <button key={c.id} className="link" onClick={() => pickPerson(c.id)} title={c.known_for}>
+                          {c.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
               {summary?.religions && (
                 <>
                   <h3>Communities</h3>
@@ -344,6 +396,9 @@ export default function App() {
                 <option value="left">Departures</option>
                 <option value="report">Monthly and yearly reports</option>
                 <option value="policy">Rule changes</option>
+                <option value="treated">Doctor visits</option>
+                <option value="sick">Serious illness</option>
+                <option value="tax_audit">Tax audits</option>
                 <option value="day_summary">Daily reports</option>
               </select>
               <ul className="events">
@@ -370,6 +425,12 @@ export default function App() {
               <h2>Money</h2>
               <LineChart days={chart.days} series={chart.money} height={120} />
               <LineChart days={chart.days} series={chart.budget} height={130} />
+              <LineChart days={chart.days} series={chart.dodged} height={110} />
+              <h2>Happiness and opinions</h2>
+              <LineChart days={chart.days} series={chart.mood} height={130} />
+              <LineChart days={chart.days} series={chart.views} height={150} />
+              <h2>Health</h2>
+              <LineChart days={chart.days} series={chart.health} height={130} />
               <h2>Getting around</h2>
               <LineChart days={chart.days} series={chart.travel} height={130} />
               <LineChart days={chart.days} series={chart.modes} height={130} />

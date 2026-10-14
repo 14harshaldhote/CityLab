@@ -24,6 +24,8 @@ from .agencies import SITE_WAGE, Government
 from .economy import Economy
 from .events import Event, EventBus
 from .faith import PLACE_KINDS, festival_on
+from .health import Health
+from .mind import Mind
 from .names import RELIGION_LABEL, family_name, first_name, pick_religion
 from .people import ACTIVITY_NAMES, SLEEP, TRAVEL, Household, Job, Person
 from .rng import Streams, stable_hash
@@ -56,10 +58,12 @@ class World:
         self._next_hh = 0
         self.daily: list[dict[str, Any]] = []  # one row of statistics per simulated day
         self.today = lifecycle.DayCounts()
-        self._by_kind = {k: [b for b in self.city.buildings if b.kind == k] for k in ("restaurant", "shop", "park", "school", *PLACE_KINDS)}
+        self._by_kind = {k: [b for b in self.city.buildings if b.kind == k] for k in ("restaurant", "shop", "park", "school", "hospital", *PLACE_KINDS)}
         self.festival: tuple[str, str, str] | None = festival_on(0)
         self._near_cache: dict[tuple[int, str], list] = {}
         self.policy = Policy()
+        self.mind = Mind(self)
+        self.health = Health(self)
         self.brain = Brain(self)
         self.economy = Economy(self)
         self._founded = False
@@ -99,7 +103,9 @@ class World:
     # ---- events ---------------------------------------------------------------------
 
     def emit(self, kind: str, text: str, people: tuple[int, ...] = (), place: int | None = None, **data: Any) -> Event:
-        return self.bus.publish(Event(t=self.t, kind=kind, text=text, people=people, place=place, data=data))
+        event = self.bus.publish(Event(t=self.t, kind=kind, text=text, people=people, place=place, data=data))
+        self.mind.react(event)  # what happens to people moves their feelings and views
+        return event
 
     # ---- people -----------------------------------------------------------------------
 
@@ -185,6 +191,7 @@ class World:
         shift = b.jobs[slot % len(b.jobs)]
         wage = (SITE_WAGE if b.status == "construction" else b.type.wage) * (0.8 + 0.6 * p.skill)
         p.job = Job(building=building, shift=shift, wage=round(wage, 2), since=self.t)
+        p.cash_job = self.economy.offers_cash(b)
         p.unemployed_since = None
         self.job_holders[building].append(p.id)
 
@@ -201,6 +208,7 @@ class World:
         self._near_cache.clear()
         if b.jobs and b.kind not in ("school", "hospital", "police", "city_hall", "park"):
             self.economy.credit.setdefault(self.economy.company(b.id), 650.0)
+            self.economy.new_books(b)
 
     def fire(self, p: Person) -> None:
         if p.job is not None:
@@ -208,6 +216,7 @@ class World:
             if p.id in holders:
                 holders.remove(p.id)
             p.job = None
+            p.cash_job = False
 
     def enrol(self, p: Person) -> bool:
         home = self.city.buildings[self.households[p.household].home]
@@ -429,6 +438,11 @@ class World:
             "friends": friends,
             "friend_count": len(self.social.friends(pid)),
             "money": self.economy.person_view(pid),
+            "illness": {"what": p.illness, "how": {1: "mild", 2: "moderate", 3: "serious"}[p.severity], "seen_doctor": p.seen_doctor}
+            if p.alive and p.illness else None,
+            "happiness": round(p.happiness, 2),
+            "cash_job": p.cash_job,
+            "mind": self.mind.person(p),
         }
 
     def summary(self) -> dict[str, Any]:

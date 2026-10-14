@@ -64,12 +64,28 @@ completely free and runs on your own computer.
 14. **Switch to the flat map.** Press *Map* for a colourful, hand-drawn view where
     every dot is a person, coloured by what they're doing.
 15. **Ask the city anything.** Open the *Ask* tab and type a question in plain
-    words: "How many babies were born last week?", "Why were there thefts in
-    Shivaji Nagar?", "Which street has the worst traffic?", "Who is Neha
-    Gokhale?". The city looks it up in its diary and shows the records it used,
-    each with links to the people and places involved, and a *go there* button
-    that takes you back to that very moment.
-16. **Try to trick it.** Ask it to reveal its secret instructions, to "ignore
+    words, typos and all: "How many babies were born last week?", "Who is the
+    angriest person in the city?", "Why are people in Bazaar Peth less happy?",
+    "Which doctor makes the most mistakes?", "Is the city running out of
+    money?", "What do unemployed people think about the council?". It does the
+    sums itself, checks what your question takes for granted, says "I don't
+    know" when it doesn't, and shows the records it used, each with links to the
+    people and places involved and a *go there* button that takes you back to
+    that very moment.
+16. **Feel the city's mood.** The City tab shows how happy Kamalnagar is, how
+    people feel tonight and what they think of the taxes, the police, the
+    hospital, the buses and the council. Click anyone to see their joys, worries
+    and opinions. When someone is laid off, watch them get sad and angry, and grumble
+    about the job market to their friends.
+17. **Visit the hospital.** People catch colds, fevers and stomach bugs (more in
+    the monsoon), and older people go for check-ups. Each doctor has their own
+    style: some are kind, some are quick, and all of them get tired by the end of
+    a long day. In Records, pick *Doctor visits* to read every appointment.
+18. **Catch the tax dodgers.** A few shops pay their staff cash in hand and keep
+    half their takings off the books. The Tax Office audits a few businesses every
+    week and fines the ones it catches. Ask the city who pays and who doesn't,
+    and what it costs everyone else.
+19. **Try to trick it.** Ask it to reveal its secret instructions, to "ignore
     your rules", to pretend to be someone else, or to write you a poem. Its
     shield catches the trick, tells you what it spotted, and answers only the
     real question, if there was one.
@@ -103,6 +119,26 @@ These are the same ideas that power modern games and AI, in plain words.
   feels longer than riding, walking in the rain feels much longer, and a fare
   matters more to someone who earns less. That's how real cities end up with
   their mix of buses, autos and footpaths.
+* **People have feelings, opinions and a reputation.** Each person feels joy,
+  sadness, anger and fear. A new job, a wedding or a festival of their own faith
+  lifts them; a lay-off, a theft, an illness or money worries bring them down,
+  and the feelings fade back to their own nature over a few days. Feelings change
+  what they do next: sad people seek out friends, anxious people stay in after
+  dark. Everyone also has their own slant on the taxes, the police, the hospital,
+  the buses, finding work and the council, shaped by what happens to them and
+  then by talking with friends. Independent-minded people stick to their views;
+  easy-going ones are swayed more. The most popular, the richest, the department
+  heads and the best-loved doctors become the city's best-known people. This is
+  how researchers model how opinions spread through a crowd.
+* **A happiness index.** Every night the city asks each adult how life is going:
+  their days, money, work, friends, health and feelings. The average is the
+  happiness index, the same idea some countries use alongside GDP.
+* **Doctors are people too.** A doctor's personality decides how they work: caring
+  doctors are kinder, careful ones take longer, experienced ones get the diagnosis
+  right more often, and calm ones stay patient when the queue is long. Everyone
+  gets more time with a doctor when they're very young, old or seriously ill, and
+  less when the doctor is tired. A patient's faith, name or neighbourhood never
+  changes how they're treated, and anyone who can't afford it is treated free.
 * **Crime comes from hard times, never from who you are.** Nobody in Kamalnagar
   is born a thief. People are only tempted when their money runs out, their debts
   pile up or they lose their job, and a little more if they've been caught
@@ -168,11 +204,12 @@ These are the same ideas that power modern games and AI, in plain words.
 * **Places of worship:** mandirs, masjids, a church, a gurudwara with its free
   langar, a Buddha vihar, a Jain derasar and a Parsi agiary.
 * **Money:** wages, rent, groceries, water bills, taxes, pensions, savings,
-  loans, and companies that grow or lay people off.
+  loans, companies that grow or lay people off, and a few that dodge their taxes.
 * **Getting around:** five city bus routes, including a ring road around the
   centre, with almost 50 stops, plus autos and cars. Streets are named the
   Indian way, like M.G. Road, Tilak Road and Gandhi Marg.
-* **People who run the city:** the police and the District Court, a town planning office, a public works department
+* **People who run the city:** the police and the District Court, the Civil Hospital and its doctors, the Municipal Tax
+  Office, a town planning office, a public works department
   that lays and widens roads, the municipal bus service, an education department,
   the water supply, and local builders who borrow from City Bank to put up new
   homes and shops.

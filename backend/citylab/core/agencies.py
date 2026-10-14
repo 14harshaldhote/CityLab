@@ -123,6 +123,8 @@ class Government:
             Department("transport", "Kamalnagar Municipal Transport", "government", "Runs the city buses and keeps an eye on traffic."),
             Department("police", "Kamalnagar Police", "government", "Patrols the streets, investigates thefts and puts up CCTV cameras."),
             Department("court", "District Court", "government", "Hears the cases the police bring and decides who is guilty."),
+            Department("health", "Kamalnagar Civil Hospital", "government", "Treats the sick, free for those who can't afford it."),
+            Department("tax", "Municipal Tax Office", "government", "Collects taxes and audits businesses that dodge them."),
             Department("builders", "Private builders", "private", "Developers who build housing societies, offices and shops."),
             Department("trusts", "Community trusts", "private", "Raise money to build new places of worship."),
         ):
@@ -137,6 +139,8 @@ class Government:
         self._water()
         self._transport()
         self._justice()
+        self._health()
+        self._tax(rng)
         self._build(rng)
         self._roads()
         self._widen()
@@ -145,7 +149,7 @@ class Government:
     def _heads(self) -> None:
         """Each department is led by someone who works at the municipal corporation."""
         w = self.w
-        home_of = {"police": "police", "court": "court"}  # led from their own building; the rest from City Hall
+        home_of = {"police": "police", "court": "court", "health": "hospital"}  # led from their own building; the rest from City Hall
         taken = {d.head for d in self.departments.values() if d.head is not None}
         for d in self.departments.values():
             if d.sector != "government":
@@ -197,6 +201,33 @@ class Government:
         police.done = sum(1 for c in cr.cases.values() if c.status in ("awaiting trial", "convicted", "acquitted"))
         court.watching = f"{len(cr.court)} {'case' if len(cr.court) == 1 else 'cases'} waiting for a hearing."
         court.done = sum(1 for c in cr.cases.values() if c.status in ("convicted", "acquitted"))
+
+    def _health(self) -> None:
+        from .health import is_doctor
+
+        w = self.w
+        d = self.departments["health"]
+        doctors = sum(1 for p in w.alive() if is_doctor(w, p))
+        from .health import CHECKUP
+
+        sick = sum(1 for p in w.alive() if p.illness not in (None, CHECKUP))
+        today = w.health.today
+        d.done += today["visits"]
+        d.spent += w.economy.city_out.get("medicines", 0.0)
+        d.watching = f"{doctors} doctors on the staff; {sick} people ill in the city; {today['visits']} patients seen today."
+
+    def _tax(self, rng: np.random.Generator) -> None:
+        w = self.w
+        d = self.departments["tax"]
+        econ = w.economy
+        if (w.t // MINUTES_PER_DAY) % 7 == 3:  # audit day
+            done = econ.audit(rng)
+            caught = sum(1 for a in done if a["caught"])
+            d.done += caught
+            self.last_audit = f"This week it audited {len(done)} businesses and caught {caught} dodging tax."
+        dodge = econ.dodging()
+        d.watching = (f"{dodge['taxpayers']} people pay income tax; {dodge['cash_workers']} are paid cash in hand and "
+                      f"{dodge['cash_books']} shops and restaurants under-declare their takings. " + getattr(self, "last_audit", ""))
 
     # ---- construction ---------------------------------------------------------------------
 

@@ -28,6 +28,7 @@ import numpy as np
 
 from .clock import DAYS_PER_YEAR, MINUTES_PER_DAY, MINUTES_PER_YEAR, SimTime
 from . import reports
+from .health import nightly_happiness
 from .faith import festival_on
 from .names import RELIGION_LABEL, pick_religion
 from .people import Person, gompertz_annual
@@ -70,6 +71,7 @@ def end_of_day(w: World) -> None:
     w.government.daily()  # departments and builders, before the books close (crews are paid with today's wages)
     money = w.economy.end_of_day()
     crime = w.crime.daily()
+    health = w.health.nightly()
 
     for p in alive:
         _birthday(w, p, t)
@@ -93,6 +95,9 @@ def end_of_day(w: World) -> None:
     row.update({k: v for k, v in money.items() if k != "flows"})
     row.update(traffic)
     row.update(crime)
+    row.update(health)
+    row.update(nightly_happiness(w))
+    row.update(w.mind.nightly())
     row["day"] = SimTime(t).day
     row["clustering"] = w.social.clustering() if SimTime(t).day % 7 == 0 else (w.daily[-1]["clustering"] if w.daily else 0.0)
     w.daily.append(row)

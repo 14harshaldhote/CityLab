@@ -50,7 +50,7 @@ describe("art", () => {
       expect(ROOF[kind]).toBeDefined();
       expect(buildingHeight({ ...box, kind })).toBeGreaterThan(0);
     }
-    expect(PEOPLE).toHaveLength(12); // one colour per activity, the last for people in jail
+    expect(PEOPLE).toHaveLength(13); // one colour per activity, ending with jail and the hospital
   });
 
   it("is dark at night and bright at noon", () => {

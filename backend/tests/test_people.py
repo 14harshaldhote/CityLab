@@ -63,11 +63,11 @@ def test_trips_move_people_along_streets(fresh_world):
     _at(w, 4, 8)
     movers = [p for p in w.alive() if p.activity == TRAVEL]
     assert movers
-    p = movers[0]
-    x0, y0 = w.position(p)
+    before = {p.id: w.position(p) for p in movers}
     w.advance(1)
-    if p.activity == TRAVEL:
-        assert w.position(p) != (x0, y0)
+    still = [p for p in movers if p.activity == TRAVEL]
+    # someone waiting at a bus stop stands still for a minute; the travellers as a whole move along the streets
+    assert any(w.position(p) != before[p.id] for p in still)
 
 
 def test_same_seed_same_day():
