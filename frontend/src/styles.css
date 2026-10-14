@@ -589,6 +589,47 @@ aside {
   font-variant-numeric: tabular-nums;
 }
 
+/* ---- the whole town, next to a real Indian town ---- */
+.compare {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.compare th {
+  text-align: right;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 2px 4px;
+}
+
+.compare td {
+  padding: 3px 4px;
+  border-top: 1px dashed var(--line);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.compare td:first-child {
+  text-align: left;
+}
+
+.compare td.near {
+  color: var(--sage);
+  font-weight: 600;
+}
+
+.compare td.off {
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.compare td.far {
+  color: var(--warn);
+  font-weight: 600;
+}
+
 /* ---- the 3D city ---- */
 .map3d {
   position: relative;

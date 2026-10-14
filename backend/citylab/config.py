@@ -13,7 +13,8 @@ def _env(name: str, default: str) -> str:
 @dataclass(frozen=True)
 class Settings:
     seed: int = field(default_factory=lambda: int(_env("SEED", "1")))
-    population: int = field(default_factory=lambda: int(_env("POPULATION", "2000")))
+    population: int = field(default_factory=lambda: int(_env("POPULATION", "5000")))  # people acted out on the map
+    town: int = field(default_factory=lambda: int(_env("TOWN", "200000")))  # everyone in Kamalnagar, map included
     database_url: str = field(default_factory=lambda: _env("DATABASE_URL", ""))
     start_playing: bool = field(default_factory=lambda: _env("AUTOPLAY", "1") == "1")
     speed: float = field(default_factory=lambda: float(_env("SPEED", "10")))  # sim minutes per real second

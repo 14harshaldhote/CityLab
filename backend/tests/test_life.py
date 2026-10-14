@@ -60,11 +60,11 @@ def test_tired_doctors_rush(city):
     for d in (p for p in w.alive() if is_doctor(w, p)):  # put every doctor on shift, at the start of their day
         d.activity, d.place = WORK, hosp
     w.health.seen_today.clear()
-    patients = [p for p in w.alive() if p.age(w.t) >= 18][:40]
+    patients = [p for p in w.alive() if p.age(w.t) >= 18][:100]  # a crowded morning: enough for every doctor to tire
     for p in patients:
         p.illness, p.severity = "a fever", 2
         w.health.consult(p, hosp, w.t)
-    vs = [v for v in list(w.health.visits)[-40:] if v["doctor"] is not None]
+    vs = [v for v in list(w.health.visits)[-100:] if v["doctor"] is not None]
     early = [v["minutes"] for v in vs if v["nth"] <= 3]
     late = [v["minutes"] for v in vs if v["nth"] >= 6]
     assert early and late

@@ -36,7 +36,7 @@ import numpy as np
 
 from .citygen import CENTRE, Building, _nearest_node
 from .clock import MINUTES_PER_DAY, SimTime
-from .routing import AUTO, BUS, CAR, WAIT, WALK, WALK_M_PER_MIN, Trip, _access
+from .routing import AUTO, BUS, CAR, SCOOTER, WAIT, WALK, WALK_M_PER_MIN, Trip, _access
 
 if TYPE_CHECKING:
     from .people import Person
@@ -48,13 +48,14 @@ CAPACITY = 3.5  # vehicles a street takes per slot before it slows (a small city
 WIDE = 1.8  # a widened street takes this much more
 UNDER_WORKS = 0.6  # and this much less while it is being widened
 ALPHA, BETA, MAX_SLOWDOWN = 0.6, 4, 6.0
-PCU = {"car": 1.0, "auto": 0.7, "bus": 1.0}  # how much room each vehicle takes
+PCU = {"car": 1.0, "auto": 0.7, "bus": 1.0, "scooter": 0.4}  # how much room each vehicle takes
 BUS_PACE = 0.85  # buses are a bit slower than cars
 DWELL = 0.5  # minutes at each stop
 BUS_ROOM = 60
 AUTO_BASE, AUTO_PER_KM = 25.0, 13.0  # minimum fare covers the first 1.5 km
-PETROL_PER_KM = 5.0
-DIESEL_PER_KM = 1.5  # per bus-kilometre, a small city fleet
+PETROL_PER_KM = 7.0  # ₹105 a litre, 15 km a litre
+SCOOTER_PETROL_PER_KM = 2.5  # 45 km a litre
+DIESEL_PER_KM = 25.0  # per bus-kilometre: ₹90 a litre, 3.6 km a litre
 WALK_ONLY = 900.0  # metres: always walked
 CAR_MIN = 1200.0  # metres: worth taking the car
 TO_STOP = 650.0  # metres people will walk to or from a bus stop
@@ -126,7 +127,7 @@ class Run:
 
 @dataclass
 class Today:
-    trips: dict[str, int] = field(default_factory=lambda: {"walk": 0, "car": 0, "bus": 0, "auto": 0})
+    trips: dict[str, int] = field(default_factory=lambda: {"walk": 0, "car": 0, "bus": 0, "auto": 0, "scooter": 0})
     commute_minutes: float = 0.0
     commutes: int = 0
     late: int = 0
@@ -418,6 +419,9 @@ class Transport:
         elif hh.has_car and age >= 18 and dist >= CAR_MIN:
             trip = self._vehicle(pts, nodes, t, "car", record=True)
             self._pay(p, trip, dist)
+        elif hh.has_scooter and age >= 18 and dist >= WALK_ONLY:
+            trip = self._vehicle(pts, nodes, t, "scooter", record=True)
+            self._pay(p, trip, dist)
         else:
             trip = self._choose(p, src, dst, pts, nodes, dist, t, age)
         self.today.trips[trip.mode] += 1
@@ -434,11 +438,11 @@ class Transport:
 
     def _vehicle(self, pts: list[tuple[float, float]], nodes: tuple[int, ...], t: int, kind: str, record: bool) -> Trip:
         """Car or auto: get going (find the car, or hail an auto), drive in traffic, park."""
-        start = 2.0 if kind == "car" else 3.0
+        start = {"car": 2.0, "scooter": 1.0}.get(kind, 3.0)
         node_times = self._drive(nodes, t + start + math.dist(pts[0], pts[1]) / FREE_SPEED, kind, record)
         times = [float(t), t + start] + node_times + [node_times[-1] + math.dist(pts[-2], pts[-1]) / FREE_SPEED]
         points = [pts[0], pts[0]] + pts[1:]
-        move = CAR if kind == "car" else AUTO
+        move = {"car": CAR, "scooter": SCOOTER}.get(kind, AUTO)
         legs = [WAIT if kind == "auto" else move] + [move] * (len(points) - 2)
         if kind == "car":  # parking
             times.append(times[-1] + 2)
@@ -449,7 +453,7 @@ class Transport:
     def _value_of_time(self, p: Person, age: float) -> float:
         """Rupees a minute feels worth: what they earn, roughly."""
         if p.job is not None:
-            return max(0.4, p.job.wage / 150.0)
+            return max(0.4, p.job.wage / 480.0)
         if age < 18:
             return 0.25
         return 0.5
@@ -473,7 +477,7 @@ class Transport:
                 options.append((effort * walked + 1.4 * wait + ride + trip.fare / vot, trip))
         if age >= 16 and payer is not None:
             fare = round(AUTO_BASE + AUTO_PER_KM * max(0.0, dist / 1000.0 - 1.5), 0)
-            if econ.can_afford(payer, fare + 100):
+            if econ.can_afford(payer, fare + 500):
                 auto = self._vehicle(pts, nodes, t, "auto", record=False)
                 auto.fare = fare
                 options.append(((auto.arrive - t) + fare / vot, auto))
@@ -507,8 +511,8 @@ class Transport:
         if payer is None:
             return
         acct = econ.person(payer.id)
-        if trip.mode == "car":
-            econ.transfer(acct, "outside", PETROL_PER_KM * dist / 1000.0, "petrol")
+        if trip.mode in ("car", "scooter"):
+            econ.transfer(acct, "outside", (PETROL_PER_KM if trip.mode == "car" else SCOOTER_PETROL_PER_KM) * dist / 1000.0, "petrol")
         elif trip.mode == "bus" and trip.fare > 0:
             self.today.fares += econ.transfer(acct, "city", trip.fare, "bus fares")
         elif trip.mode == "auto":
@@ -571,7 +575,7 @@ class Transport:
         riders = sum(self.riders_today.values())
         row = {
             "trips_walk": today.trips["walk"], "trips_car": today.trips["car"], "trips_bus": today.trips["bus"],
-            "trips_auto": today.trips["auto"], "commute_min": round(today.commute_minutes / max(1, today.commutes), 1),
+            "trips_auto": today.trips["auto"], "trips_scooter": today.trips["scooter"], "commute_min": round(today.commute_minutes / max(1, today.commutes), 1),
             "late": today.late, "bus_riders": riders, "bus_fares": round(today.fares, 2),
         }
         worst = self.jams(limit=1, peak=self.peak)
@@ -650,6 +654,8 @@ class Transport:
             return "Hailing an auto-rickshaw" if leg == WAIT else "Riding in an auto-rickshaw"
         if trip.mode == "car":
             return "Driving"
+        if trip.mode == "scooter":
+            return "Riding a scooter"
         return "Walking"
 
     def view(self) -> dict[str, Any]:
@@ -674,6 +680,7 @@ class Transport:
         g = w.city.graph
         return {
             "now": {"walking": moving[WALK], "driving": moving[CAR], "on_buses": moving[BUS], "in_autos": moving[AUTO],
+                    "on_scooters": moving[SCOOTER],
                     "waiting": moving[WAIT], "buses": len(active)},
             "jams": self.jams(),
             "lines": lines,

@@ -3,6 +3,7 @@ import pytest
 from citylab.core import lifecycle
 from citylab.core.clock import MINUTES_PER_DAY, MINUTES_PER_YEAR
 from citylab.core.people import gompertz_annual
+from citylab.core.realworld import LAST_WORKING_AGE
 from citylab.core.world import World
 
 
@@ -102,11 +103,12 @@ def test_birthdays_move_people_through_life(fresh_world):
     teen = next(p for p in w.alive() if p.school is not None)
     teen.born = w.t - 18 * MINUTES_PER_YEAR
     worker = next(p for p in w.alive() if p.job is not None and not p.retired)
-    worker.born = w.t - 65 * MINUTES_PER_YEAR
+    worker.born = w.t - LAST_WORKING_AGE * MINUTES_PER_YEAR
     for p in (kid, teen, worker):
         lifecycle._birthday(w, p, w.t)
     assert kid.school is not None
-    assert teen.school is None and teen.unemployed_since == w.t
+    # at 18 most go looking for work and the rest go on to college, as in PLFS
+    assert teen.school is None and (teen.unemployed_since == w.t) != teen.at_home
     assert worker.retired and worker.job is None
     check_invariants(w)
 

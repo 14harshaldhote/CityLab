@@ -30,6 +30,8 @@ happiness index is the average over its adults, from 0 to 100.
 
 from __future__ import annotations
 
+import math
+
 from collections import defaultdict, deque
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -42,10 +44,11 @@ from .people import HOSPITAL, JAIL, WORK, Person
 if TYPE_CHECKING:
     from .world import World
 
+LADDER = 1.8  # tuned so a typical Kamalnagar adult answers about as Indians do in the World Happiness Report
 DOCTOR_SKILL = 0.72  # hospital staff at least this skilled work as doctors; the rest are nurses and orderlies
 CONSULT_FEE = 30.0
 MEDICINES = {1: 40.0, 2: 120.0, 3: 400.0}
-FREE_BELOW = 300.0  # patients with less than this in the bank are treated free; the city pays
+FREE_BELOW = 1500.0  # patients with less than this in the bank are treated free; the city pays
 BASE_MINUTES = {1: 8.0, 2: 14.0, 3: 25.0}
 SEE_DOCTOR = {1: 0.35, 2: 0.85, 3: 1.0}  # chance of going to hospital, by seriousness
 SEVERITY = {1: "mild", 2: "moderate", 3: "serious"}
@@ -285,27 +288,38 @@ class Health:
 # ---- happiness ---------------------------------------------------------------------------------------
 
 def satisfaction(w: World, p: Person) -> dict[str, float]:
-    """Life satisfaction, 0..1, and the five things it's made of."""
+    """Life satisfaction, 0..1, and the six things it's made of.
+
+    It is asked the way the World Happiness Report asks it: imagine a ladder from the worst
+    possible life (0) to the best possible life (10); where do you stand? People measure their
+    lives against the best they can imagine, not against a bad day, so a life that is merely
+    fine scores in the middle, and only a good life on every count reaches the top. Each part
+    below is scored the same way, and the ladder is their weighted average raised to a power (LADDER),
+    which keeps comfortable lives in the middle and good ones rare. In India the answer is about 4.1.
+    """
     t = w.t
     econ = w.economy
     acct = econ.person(p.id)
-    bal = econ.balance.get(acct, 0.0)
-    money = float(np.clip(bal / 3000.0, 0.0, 1.0)) * (0.6 if econ._debt(acct) > 0 else 1.0)
+    bal = max(0.0, econ.balance.get(acct, 0.0))
+    # money on a log scale: ₹1,000 saved is little, ₹3 lakh is security
+    money = float(np.clip(math.log10(1.0 + bal / 1000.0) / math.log10(301.0), 0.0, 1.0)) * (0.6 if econ._debt(acct) > 0 else 1.0)
     age = p.age(t)
-    if p.job is not None or p.school is not None:
-        work = 0.85
-    elif p.retired or age < 18:
-        work = 0.8
+    if p.job is not None:
+        work = 0.3 + 0.5 * min(1.0, p.job.wage / 1500.0)  # better-paid, steadier work is more satisfying
+    elif p.school is not None:
+        work = 0.6
+    elif p.retired or p.at_home or age < 18:
+        work = 0.5
     else:
-        work = 0.3  # looking for work
-    friends = min(1.0, len(w.social.friends(p.id)) / 8.0)
+        work = 0.15  # looking for work
+    friends = min(1.0, len(w.social.friends(p.id)) / 10.0)
     health = p.health * (0.5 if p.severity >= 2 else 0.85 if p.severity == 1 and p.illness != CHECKUP else 1.0)
     feelings = float(np.clip(0.7 + 0.6 * (p.joy - 0.4) - 0.6 * p.sadness - 0.4 * p.fear - 0.3 * p.anger, 0.0, 1.0))
     parts = {"day": p.mood, "money": money, "work": work, "friends": friends, "health": health, "feelings": feelings}
-    score = 0.2 * parts["day"] + 0.18 * money + 0.17 * work + 0.15 * friends + 0.15 * health + 0.15 * feelings
+    score = 0.1 * parts["day"] + 0.3 * money + 0.2 * work + 0.15 * friends + 0.1 * health + 0.15 * feelings
     if p.activity == JAIL:
         score *= 0.4
-    parts["score"] = float(np.clip(score, 0.0, 1.0))
+    parts["score"] = float(np.clip(score, 0.0, 1.0)) ** LADDER
     return parts
 
 

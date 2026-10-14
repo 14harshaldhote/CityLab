@@ -16,13 +16,13 @@ def test_money_is_never_created_or_destroyed():
 
 def test_workers_are_paid_and_taxed(fresh_world):
     w = fresh_world
-    worker = next(p for p in w.alive() if p.job and p.job.shift.weekdays_only)
+    worker = next(p for p in w.alive() if p.job and p.job.shift.weekdays_only and not p.cash_job and w.economy.payer_for(p.job.building) != "city")
     acct = w.economy.person(worker.id)
     w.economy.attendance[worker.job.building].append(worker.id)
     before, city = w.economy.balance[acct], w.economy.balance["city"]
     w.economy._wages()
     gross = worker.job.wage
-    assert w.economy.balance[acct] == pytest.approx(before + gross * 0.85, abs=0.02)
+    assert w.economy.balance[acct] == pytest.approx(before + gross * (1 - w.policy.income_tax), abs=0.02)
     assert w.economy.balance["city"] > city
 
 
@@ -48,7 +48,7 @@ def test_overdraft_becomes_a_loan_for_good_credit_and_is_repaid(fresh_world):
     econ._bank()
     loan = next(l for l in econ.loans.values() if l.account == acct)
     assert econ.balance[acct] >= 0
-    assert loan.principal == pytest.approx(800, abs=1)
+    assert loan.principal == pytest.approx(500 + 1500, abs=1)  # the overdraft plus a small cushion
     econ.transfer("outside", acct, 5000, "test")
     debt0 = loan.balance
     econ._bank()

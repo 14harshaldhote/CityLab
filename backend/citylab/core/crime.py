@@ -46,7 +46,7 @@ if TYPE_CHECKING:
     from .world import World
 
 TICK = 30  # minutes between chances to offend
-ATTEMPT = 0.025  # per tick, times temptation
+ATTEMPT = 0.0001  # per tick, times temptation: tuned so thefts happen about as often as in a real Indian town
 PATROL_RANGE = 350.0  # metres: a patrol this close puts most people off
 DETERRED = 0.65
 CAUGHT_IN_THE_ACT = 0.5
@@ -62,6 +62,8 @@ LOSE_JOB_DAYS = 14
 LABEL = {"pickpocket": "pickpocketing", "shoplift": "shoplifting", "burglary": "burglary"}
 KIND_INDEX = {"pickpocket": 0, "shoplift": 1, "burglary": 2}
 CROWD = 6
+# most petty thefts never reach the police: a lost wallet is rarely worth a day at the station
+REPORT_ODDS = {"pickpocket": 0.2, "shoplift": 0.3, "burglary": 0.75}
 WORSHIP_OR_LEISURE = ("park", "restaurant", "temple", "mosque", "church", "gurudwara", "vihara", "derasar", "agiary", "hospital")
 
 
@@ -71,11 +73,11 @@ def temptation(p: Person, balance: float, debt: float, t: int) -> float:
     if age < 18 or age >= 70:
         return 0.0
     hard = 0.0
-    if p.job is None and not p.retired and p.school is None:
+    if p.job is None and not p.retired and not p.at_home and p.school is None:
         hard += 0.45
     if debt > 0:
-        hard += min(0.35, debt / 6000.0)
-    if balance < 200:
+        hard += min(0.35, debt / 30_000.0)
+    if balance < 1000:
         hard += 0.3
     temper = 0.5 * (1 - p.conscientiousness) + 0.5 * (1 - p.agreeableness)
     m = min(1.0, hard) * temper**2 + 0.015 * temper**3  # a sliver of opportunism in anyone
@@ -298,7 +300,7 @@ class Crime:
             crowd = [q for q in inside.get(b.id, []) if q != p.id]
             x, y = b.x + b.w / 2, b.y + b.h / 2
             if b.kind == "shop" and len(crowd) < CROWD:
-                self._commit(p, "shoplift", t, x, y, b.name, b.id, econ.company(b.id), None, b.name, float(rng.uniform(150, 600)), crowd)
+                self._commit(p, "shoplift", t, x, y, b.name, b.id, econ.company(b.id), None, b.name, float(rng.uniform(300, 1500)), crowd)
                 return
             if len(crowd) >= CROWD and b.kind in (*WORSHIP_OR_LEISURE, "shop"):
                 self._pickpocket(p, t, x, y, b.name, b.id, crowd)
@@ -336,7 +338,7 @@ class Crime:
         if payer is None:
             return
         cash = max(0.0, econ.balance[econ.person(payer)])
-        value = min(cash * 0.25, float(rng.uniform(800, 4000)))
+        value = min(cash * 0.25, float(rng.uniform(5000, 25_000)))
         if value < 100:
             return
         victim = w.people[payer]
@@ -346,11 +348,11 @@ class Crime:
     def _pickpocket(self, p: Person, t: int, x: float, y: float, place: str, building: int | None, crowd: list[int]) -> None:
         w = self.w
         econ = w.economy
-        marks = [q for q in crowd if w.people[q].age(t) >= 18 and econ.balance[econ.person(q)] > 200]
+        marks = [q for q in crowd if w.people[q].age(t) >= 18 and econ.balance[econ.person(q)] > 1000]
         if not marks:
             return
         v = w.people[marks[int(self.rng.integers(len(marks)))]]
-        value = min(econ.balance[econ.person(v.id)] * 0.3, float(self.rng.uniform(60, 400)))
+        value = min(econ.balance[econ.person(v.id)] * 0.3, float(self.rng.uniform(500, 3000)))
         self._commit(p, "pickpocket", t, x, y, place, building, econ.person(v.id), v.id, v.name, value, [q for q in crowd if q != v.id])
 
     def _commit(self, p: Person, kind: str, t: int, x: float, y: float, place: str, building: int | None, victim: str,
@@ -387,7 +389,7 @@ class Crime:
         if kind == "burglary" and rng.random() < 0.3:
             c.witnesses += 1  # a neighbour heard something
         c.evidence = min(0.95, c.evidence + 0.12 * min(3, c.witnesses))
-        c.reported = rng.random() < {"pickpocket": 0.7, "shoplift": 0.8, "burglary": 0.95}[kind]
+        c.reported = rng.random() < REPORT_ODDS[kind]
         if not c.reported:
             c.status = "unreported"
             return
@@ -403,7 +405,7 @@ class Crime:
         w = self.w
         station = self._station()
         staff = len(w.job_holders.get(station, [])) if station is not None else 0
-        power = min(1.2, staff / 20.0)
+        power = min(1.2, staff / 10.0)
         for c in sorted(self.cases.values(), key=lambda c: c.id):
             if c.status != "investigating":
                 continue
@@ -457,7 +459,7 @@ class Crime:
                 acct = econ.person(p.id)
                 back = min(c.value, max(0.0, econ.balance[acct]))
                 econ.transfer(acct, c.victim, back, "paid back to victims")
-                fine = round(max(200.0, c.value * 0.5), -1)
+                fine = round(max(1000.0, c.value * 0.5), -1)
                 econ.transfer(acct, "city", fine, "court fines")
                 days = JAIL_DAYS[c.kind] * (1 + p.record) if c.kind == "burglary" or p.record else 0
                 days = min(days, 60)

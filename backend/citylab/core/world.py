@@ -33,12 +33,14 @@ from .routing import Router
 from .transport import Transport
 from .crime import Crime
 from .policy import Policy
+from .realworld import CAR_OWNERS, LAST_WORKING_AGE, SCOOTER_OWNERS, RETIREMENT_AGE, TOWN_POPULATION, UNEMPLOYMENT, work_force_share
 from .social import SocialGraph
+from .town import Town
 from .weather import Weather
 
 
 class World:
-    def __init__(self, seed: int = 1, population: int = 2000, *, city: City | None = None) -> None:
+    def __init__(self, seed: int = 1, population: int = 2000, *, city: City | None = None, town: int = TOWN_POPULATION) -> None:
         self.seed = seed
         self.streams = Streams(seed)
         self.city = city or generate_city(seed)
@@ -61,6 +63,7 @@ class World:
         self._by_kind = {k: [b for b in self.city.buildings if b.kind == k] for k in ("restaurant", "shop", "park", "school", "hospital", *PLACE_KINDS)}
         self.festival: tuple[str, str, str] | None = festival_on(0)
         self._near_cache: dict[tuple[int, str], list] = {}
+        self._open_t, self._open = -1, {}
         self.policy = Policy()
         self.mind = Mind(self)
         self.health = Health(self)
@@ -70,7 +73,9 @@ class World:
         self.government = Government(self)
         self.transport = Transport(self)
         self.crime = Crime(self)
+        self.town = Town(self, max(town, population))
         self._populate(population)
+        self.town.found()
         self.economy.found()
         self._founded = True
 
@@ -155,8 +160,8 @@ class World:
             self.economy.open(p)
         return p
 
-    def new_household(self, home: int, has_car: bool) -> Household:
-        hh = Household(id=self._next_hh, home=home, members=[], has_car=has_car)
+    def new_household(self, home: int, has_car: bool, has_scooter: bool = False) -> Household:
+        hh = Household(id=self._next_hh, home=home, members=[], has_car=has_car, has_scooter=has_scooter)
         self._next_hh += 1
         self.households[hh.id] = hh
         self.occupancy[home].append(hh.id)
@@ -206,6 +211,7 @@ class World:
         if b.kind in self._by_kind:
             self._by_kind[b.kind].append(b)
         self._near_cache.clear()
+        self._open_t = -1
         if b.jobs and b.kind not in ("school", "hospital", "police", "city_hall", "park"):
             self.economy.credit.setdefault(self.economy.company(b.id), 650.0)
             self.economy.new_books(b)
@@ -239,12 +245,16 @@ class World:
     # ---- places -----------------------------------------------------------------------------
 
     def nearest_open(self, here: int, kind: str, t: int) -> int | None:
+        if self._open_t != t:  # many people choose in the same minute: answer each question once
+            self._open_t, self._open = t, {}
+        key = (here, kind)
+        if key in self._open:
+            return self._open[key]
         st = SimTime(t)
         mod, weekend = st.minute_of_day, st.is_weekend
-        for b in self._nearby(here, kind):
-            if b.is_open(mod, weekend):
-                return b.id
-        return None
+        found = next((b.id for b in self._nearby(here, kind) if b.is_open(mod, weekend)), None)
+        self._open[key] = found
+        return found
 
     def _nearby(self, here: int, kind: str) -> list:
         key = (here, kind)
@@ -270,44 +280,72 @@ class World:
         for home in order:
             if made >= target:
                 break
-            hh = self.new_household(home, has_car=bool(rng.random() < 0.45))
+            hh = self.new_household(home, has_car=bool(rng.random() < CAR_OWNERS), has_scooter=bool(rng.random() < SCOOTER_OWNERS))
             faith = pick_religion(rng)
             last = family_name(rng, faith)
-            kind = rng.choice(["single", "couple", "family", "single_parent", "seniors"], p=[0.2, 0.22, 0.38, 0.07, 0.13])
+            # Indian town households: mostly parents and children, often with grandparents, and grown-up
+            # children live at home until they marry (about 4.4 people a household, Census 2011)
+            kind = rng.choice(["single", "couple", "family", "joint", "single_parent", "seniors"], p=[0.13, 0.11, 0.45, 0.23, 0.04, 0.04])
             adults: list[Person] = []
             if kind == "seniors":
-                a = 65 + rng.integers(0, 22)
+                a = 62 + rng.integers(0, 25)
                 adults.append(self.new_person(sex="F", born=born(a), household=hh.id, last=last, religion=faith))
-                if rng.random() < 0.7:
-                    adults.append(self.new_person(sex="M", born=born(a + rng.integers(-3, 5)), household=hh.id, last=last, religion=faith))
+                if rng.random() < 0.6:
+                    adults.append(self.new_person(sex="M", born=born(a + rng.integers(1, 6)), household=hh.id, last=last, religion=faith))
             else:
-                a = 21 + rng.integers(0, 40) if kind != "family" else 27 + rng.integers(0, 22)
-                first_sex = "F" if kind in ("family", "single_parent") or rng.random() < 0.5 else "M"
+                if kind == "single":  # mostly young men who came to town for work
+                    a, first_sex = 20 + rng.integers(0, 14), "M" if rng.random() < 0.9 else "F"
+                elif kind == "couple":
+                    a, first_sex = 21 + rng.integers(0, 10) if rng.random() < 0.6 else 50 + rng.integers(0, 18), "F"
+                else:
+                    a, first_sex = 22 + rng.integers(0, 30), "F"
                 adults.append(self.new_person(sex=first_sex, born=born(a), household=hh.id, last=last, religion=faith))
-                if kind in ("couple", "family"):
-                    other = "M" if rng.random() < 0.95 else first_sex
-                    adults.append(self.new_person(sex=other, born=born(max(20, a + rng.integers(-4, 6))), household=hh.id, last=last, religion=faith))
+                if kind in ("couple", "family", "joint"):
+                    adults.append(self.new_person(sex="M", born=born(a + rng.integers(1, 7)), household=hh.id, last=last, religion=faith))
             if len(adults) == 2:
                 lifecycle.make_couple(self, adults[0], adults[1], announce=False)
-            if kind in ("family", "single_parent"):
+            if kind in ("family", "joint", "single_parent"):
                 mother_age = adults[0].age(0)
-                for _ in range(int(rng.integers(1, 4))):
-                    child_age = float(rng.uniform(0, max(0.5, min(17.9, mother_age - 20))))
-                    self.new_person(sex="F" if rng.random() < 0.49 else "M", born=born(child_age), household=hh.id,
+                for _ in range(int(rng.choice([1, 2, 3, 4], p=[0.15, 0.45, 0.3, 0.1]))):
+                    child_age = mother_age - float(rng.uniform(20, 34))  # born when their mother was 20 to 34
+                    if child_age < 0 or child_age >= 30:
+                        continue
+                    self.new_person(sex="F" if rng.random() < 0.475 else "M", born=born(child_age), household=hh.id,
                                     last=last, parents=tuple(q.id for q in adults))
+            if kind == "joint":  # the husband's parents, or a widowed parent
+                g = min(90, adults[1].age(0) + 24 + rng.integers(0, 8))
+                elders = [self.new_person(sex="F" if rng.random() < 0.7 else "M", born=born(g - rng.integers(1, 6)), household=hh.id,
+                                          last=last, religion=faith)]
+                if rng.random() < 0.55 and elders[0].sex == "F":
+                    elders.append(self.new_person(sex="M", born=born(g), household=hh.id, last=last, religion=faith))
+                    lifecycle.make_couple(self, elders[0], elders[1], announce=False)
+                adults[1].parents = tuple(q.id for q in elders)
+                for e in elders:
+                    e.children.append(adults[1].id)
             made += len(hh.members)
 
         # skills, schools, jobs, retirement
         vac = self.vacancies()
         vac_order = [vac[i] for i in rng.permutation(len(vac))]
+        # the hospital and the police station are staffed first, as any real town's are
+        vac_order.sort(key=lambda v: self.city.buildings[v[0]].kind not in ("hospital", "police"))
         for p in self.alive():
             age = p.age(0)
             p.skill = float(np.clip(rng.normal(0.25 + min(age, 45) / 90.0, 0.12), 0.05, 0.95))
             if 6 <= age < 18:
                 self.enrol(p)
-            elif age >= 65:
-                p.retired = True
-            elif age >= 18 and rng.random() < 0.9 and vac_order:
+                continue
+            if age < 18:
+                continue
+            share = work_force_share(age, p.sex)
+            if age >= RETIREMENT_AGE:  # most have retired; some keep their shop or their trade going
+                p.retired = age >= LAST_WORKING_AGE or rng.random() >= min(0.9, share * 1.6)
+                if p.retired:
+                    continue
+            elif rng.random() >= share:
+                p.at_home = True  # studying, keeping house or caring for family: not looking for paid work
+                continue
+            if rng.random() < 1.0 - UNEMPLOYMENT and vac_order:
                 home = self.city.buildings[self.households[p.household].home]
                 # take one of the nearer open jobs, as people tend to
                 sample = vac_order[: 25]
@@ -418,6 +456,7 @@ class World:
             "job": job,
             "school": self.city.buildings[p.school].name if p.school is not None else None,
             "retired": p.retired,
+            "at_home": p.at_home,
             "unemployed": p.unemployed_since is not None,
             "religion": RELIGION_LABEL[p.religion],
             "devotion": round(p.devotion, 2),
@@ -454,6 +493,8 @@ class World:
             "t": t,
             "label": self.now.label(),
             "population": len(alive),
+            "town_population": self.town.population() + len(alive),
+            "labour_force": employed + sum(1 for p in working_age if p.unemployed_since is not None),
             "households": sum(1 for h in self.households.values() if h.members),
             "employed": employed,
             "unemployed": sum(1 for p in working_age if p.unemployed_since is not None),

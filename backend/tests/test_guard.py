@@ -15,6 +15,7 @@ from citylab.ask import guard
 from citylab.ask.asker import SYSTEM
 from citylab.ask.llm import PATHS, LocalAI
 from citylab.config import Settings
+from citylab.core import crime
 from citylab.core.clock import MINUTES_PER_DAY
 from citylab.main import create_app
 
@@ -55,7 +56,11 @@ def city():
                         ollama_url=f"http://127.0.0.1:{server.server_port}", admin_token=TOKEN)
     with TestClient(create_app(settings, background=False)) as c:
         r = c.app.state.runner
-        r.step(6 * DAY + 10 * 60)
+        with pytest.MonkeyPatch.context() as mp:
+            # a crime-ridden test town, so there are thefts to ask about: every adult is a little tempted
+            mp.setattr(crime, "ATTEMPT", 0.025)
+            mp.setattr(crime, "temptation", lambda p, balance, debt, t: 0.02 if 18 <= p.age(t) < 70 else 0.0)
+            r.step(6 * DAY + 10 * 60)
         yield c
     server.shutdown()
 

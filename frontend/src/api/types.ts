@@ -105,6 +105,7 @@ export interface Summary {
   t: number;
   label: string;
   population: number;
+  town_population?: number;
   households: number;
   employed: number;
   unemployed: number;
@@ -267,6 +268,18 @@ export interface DailyRow {
   trips_car?: number;
   trips_bus?: number;
   trips_auto?: number;
+  trips_scooter?: number;
+  town_population?: number;
+  town_births?: number;
+  town_deaths?: number;
+  town_arrived?: number;
+  town_employed?: number;
+  town_unemployed?: number;
+  town_sick?: number;
+  town_hospital_visits?: number;
+  town_crimes?: number;
+  town_crimes_reported?: number;
+  town_arrests?: number;
   commute_min?: number;
   late?: number;
   bus_riders?: number;
@@ -297,7 +310,7 @@ export interface DailyRow {
 }
 
 export interface Transport {
-  now: { walking: number; driving: number; on_buses: number; in_autos: number; waiting: number; buses: number };
+  now: { walking: number; driving: number; on_buses: number; in_autos: number; on_scooters?: number; waiting: number; buses: number };
   jams: { street: string; ratio: number; speed_kmh: number }[];
   lines: { number: string; name: string; color: string; stops: number; km: number; buses_now: number; riders_now: number; riders_today: number; every: number | null }[];
   today: { trips: Record<string, number>; commute_min: number; late: number; fares: number; bus_km: number };
@@ -458,4 +471,27 @@ export interface AskStatus {
   embedded: number;
   blocked: Record<string, number>;
   incidents: { at: string; kind: string; where: string; question: string; detail: string }[];
+}
+
+/** The whole town of 2 lakh: the people on the map plus the town's books, next to a real Indian town. */
+export interface TownCompare {
+  label: string;
+  kamalnagar: number | null;
+  real: number;
+  unit: string;
+  source: string;
+}
+
+export interface Town {
+  population: number;
+  on_map: number;
+  in_books: number;
+  households: number;
+  districts: Record<string, number>;
+  ages: Record<string, number>;
+  women_per_1000_men: number;
+  faiths: Record<string, number>;
+  services: { police: number; doctors: number; teachers: number };
+  date: string;
+  compare: TownCompare[];
 }

@@ -41,15 +41,15 @@ if TYPE_CHECKING:
     from .world import World
 
 SITE_SHIFT = Shift(8 * H, 17 * H, False)
-SITE_WAGE = 115.0
+SITE_WAGE = 600.0  # a day's pay for a construction labourer in town
 CREW = {"home": 10, "office": 16, "factory": 14, "shop": 8, "restaurant": 6, "school": 12, "park": 4}
 BUILD_DAYS = {"home": 45, "apartment": 80, "office": 110, "factory": 80, "shop": 35, "restaurant": 30, "school": 70, "park": 20}
-MATERIALS_PER_DAY = {"home": 900.0, "apartment": 1800.0, "office": 2600.0, "factory": 2000.0, "shop": 700.0, "restaurant": 600.0,
-                     "school": 1500.0, "park": 300.0}
+MATERIALS_PER_DAY = {"home": 4800.0, "apartment": 9500.0, "office": 13800.0, "factory": 10600.0, "shop": 3700.0, "restaurant": 3200.0,
+                     "school": 8000.0, "park": 1600.0}
 ROAD_DAYS = 12
-ROAD_COST_PER_DAY = 2500.0
+ROAD_COST_PER_DAY = 13_000.0
 WIDEN_DAYS = 8
-WIDEN_COST_PER_DAY = 3000.0
+WIDEN_COST_PER_DAY = 16_000.0
 JAM_DAYS_TO_WIDEN = 4  # out of the last seven
 WATER_BILL = 2.0  # per person per day
 WATER_COST_SHARE = 0.6  # of the bill spent pumping and treating it
@@ -242,7 +242,7 @@ class Government:
             # contract labour from outside fills the gaps, so building never stops completely
             missing = max(0, crew - came)
             econ.transfer(pr.account, "outside", missing * SITE_WAGE * 0.5, "contract labour")
-            econ.transfer(pr.account, "outside", MATERIALS_PER_DAY.get(pr.kind, 800.0) * (0.6 + 0.4 * came / max(1, crew)), "building materials")
+            econ.transfer(pr.account, "outside", MATERIALS_PER_DAY.get(pr.kind, 4200.0) * (0.6 + 0.4 * came / max(1, crew)), "building materials")
             b.progress = min(1.0, b.progress + (0.8 + 0.2 * came / max(1, crew)) / pr.days)
             if b.progress >= 1.0:
                 self._finish(pr, b)
@@ -309,7 +309,7 @@ class Government:
             # the landlord buys the finished building; the developer clears its loan and keeps the margin
             price = round(pr.cost * SALE_MARGIN, 2)
             if econ.balance["landlord"] < price:
-                econ._borrow("landlord", price - econ.balance["landlord"] + 10_000.0, f"to buy {b.name}", days=5 * 365)
+                econ._borrow("landlord", price - econ.balance["landlord"] + 50_000.0, f"to buy {b.name}", days=5 * 365)
             econ.transfer("landlord", pr.account, price, "property sales")
             for loan in [l for l in econ.loans.values() if l.account == pr.account]:
                 pay = min(max(0.0, econ.balance[pr.account]), loan.balance)

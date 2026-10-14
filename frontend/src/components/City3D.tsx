@@ -26,6 +26,8 @@ const DRIVING = 2;
 const ON_BUS = 3;
 const IN_AUTO = 4;
 const WAITING = 5;
+const ON_SCOOTER = 6;
+const SCOOTER_COLORS = [0x2d2d2d, 0xd2463c, 0x3f63a5, 0xf2f2f2, 0x149c8f, 0x8a4fc6];
 const JAM = [
   [0.9, 0xf2b32a],
   [1.2, 0xe0602f],
@@ -233,7 +235,9 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
     const busBody = new THREE.InstancedMesh(new THREE.BoxGeometry(12, 2.8, 3).translate(0, 1.9, 0), solid, BUSES);
     const busWin = new THREE.InstancedMesh(new THREE.BoxGeometry(10.6, 1.0, 3.08).translate(0.4, 2.55, 0), solid, BUSES);
     const busRoof = new THREE.InstancedMesh(new THREE.BoxGeometry(11.6, 0.35, 2.8).translate(0, 3.45, 0), solid, BUSES);
-    for (const m of [autoBody, autoTop, busBody, busWin, busRoof]) {
+    // scooters and motorbikes, the town's favourite way to get about: a low body under its rider
+    const scooter = new THREE.InstancedMesh(new THREE.BoxGeometry(2.0, 0.8, 0.7).translate(0, 0.55, 0), solid, 2000);
+    for (const m of [autoBody, autoTop, busBody, busWin, busRoof, scooter]) {
       m.castShadow = true;
       m.frustumCulled = false;
       m.count = 0;
@@ -448,6 +452,7 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
       let nb = 0;
       let nc = 0;
       let na = 0;
+      let ns = 0;
       shown = [];
       for (let i = 0; i < n; i++) {
         const pl = next.place?.[i] ?? -1;
@@ -464,7 +469,8 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
           continue; // inside the bus
         }
         const driving = move === DRIVING;
-        const side = pl < 0 ? (driving || move === IN_AUTO ? 5 : 13) : 0;
+        const riding = move === ON_SCOOTER;
+        const side = pl < 0 ? (driving || riding || move === IN_AUTO ? 5 : 13) : 0;
         const x = pos.x[i] + hz * side;
         const z = pos.y[i] - hx * side;
         prevPos.set(id, [x, z]);
@@ -482,7 +488,14 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
         } else {
           const child = next.age[i] < 13 ? 0.7 : 1;
           const s = S * child;
-          const bob = pl < 0 && move !== WAITING ? Math.abs(Math.sin(time * 9 + id)) * 0.35 * s : 0;
+          let bob = pl < 0 && move !== WAITING ? Math.abs(Math.sin(time * 9 + id)) * 0.35 * s : 0;
+          if (riding) {
+            const cs = Math.max(1.2, S * 0.55);
+            place(scooter, ns, x, 0.3, z, cs, cs, cs, -h);
+            scooter.setColorAt(ns, col.setHex(SCOOTER_COLORS[id % SCOOTER_COLORS.length]));
+            ns++;
+            bob = 0.9 * cs; // sitting on it, not walking
+          }
           place(bodies, nb, x, bob, z, s, s, s, -h);
           place(heads, nb, x, bob, z, s, s, s, -h);
           // out and about, everyone wears their own colours (the flat map colours them by activity)
@@ -495,6 +508,7 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
       bodies.count = heads.count = nb;
       carBody.count = carTop.count = nc;
       autoBody.count = autoTop.count = na;
+      scooter.count = ns;
 
       // buses glide between server frames like everyone else
       const was = new Map((prev?.buses ?? []).map((b) => [b[0], b]));
@@ -561,7 +575,7 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
       }
       pin.count = pinHead.count = pinRing.count = np;
 
-      for (const m of [bodies, heads, carBody, carTop, autoBody, autoTop, busBody, busWin, busRoof, copBody, copTop, copBand, copLights, pin, pinHead, pinRing]) {
+      for (const m of [bodies, heads, carBody, carTop, autoBody, autoTop, scooter, busBody, busWin, busRoof, copBody, copTop, copBand, copLights, pin, pinHead, pinRing]) {
         m.instanceMatrix.needsUpdate = true;
         if (m.instanceColor) m.instanceColor.needsUpdate = true;
       }

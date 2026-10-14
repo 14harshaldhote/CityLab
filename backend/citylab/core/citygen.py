@@ -46,7 +46,7 @@ class BuildingType:
     label: str
     jobs: int
     shifts: tuple[Shift, ...]
-    wage: float  # per worked day
+    wage: float  # rupees per worked day, near what PLFS 2023-24 finds for the same work in Indian towns
     open_from: int = 0
     open_to: int = 24 * H
     weekdays_only: bool = False
@@ -57,22 +57,22 @@ TYPES: dict[str, BuildingType] = {
     t.kind: t
     for t in (
         BuildingType("home", "Homes", 0, (), 0.0),
-        BuildingType("office", "Office", 30, OFFICE_HOURS, 160.0, 8 * H, 19 * H, True),
-        BuildingType("shop", "Shop", 8, (Shift(9 * H + 30, 20 * H, False),), 95.0, 10 * H, 20 * H),
-        BuildingType("restaurant", "Restaurant", 8, (Shift(11 * H, 23 * H, False),), 90.0, 11 * H, 23 * H),
-        BuildingType("factory", "Factory", 30, (Shift(6 * H, 14 * H, False), Shift(14 * H, 22 * H, False)), 120.0),
-        BuildingType("school", "School", 25, (Shift(7 * H + 30, 15 * H + 30, True),), 130.0, 8 * H, 15 * H, True),
+        BuildingType("office", "Office", 22, OFFICE_HOURS, 750.0, 8 * H, 19 * H, True),
+        BuildingType("shop", "Shop", 8, (Shift(9 * H + 30, 20 * H, False),), 420.0, 10 * H, 20 * H),
+        BuildingType("restaurant", "Restaurant", 8, (Shift(11 * H, 23 * H, False),), 380.0, 11 * H, 23 * H),
+        BuildingType("factory", "Factory", 27, (Shift(6 * H, 14 * H, False), Shift(14 * H, 22 * H, False)), 550.0),
+        BuildingType("school", "School", 12, (Shift(7 * H + 30, 15 * H + 30, True),), 700.0, 8 * H, 15 * H, True),
         BuildingType(
-            "hospital", "Hospital", 60, (Shift(7 * H, 15 * H, False), Shift(15 * H, 23 * H, False), Shift(23 * H, 7 * H, False)), 170.0
+            "hospital", "Hospital", 27, (Shift(7 * H, 15 * H, False), Shift(15 * H, 23 * H, False), Shift(23 * H, 7 * H, False)), 750.0
         ),
         BuildingType(
-            "police", "Police station", 30, (Shift(6 * H, 14 * H, False), Shift(14 * H, 22 * H, False), Shift(22 * H, 6 * H, False)), 140.0
+            "police", "Police station", 12, (Shift(6 * H, 14 * H, False), Shift(14 * H, 22 * H, False), Shift(22 * H, 6 * H, False)), 800.0
         ),
-        BuildingType("city_hall", "City Hall", 40, OFFICE_HOURS, 150.0, 9 * H, 17 * H, True),
-        BuildingType("bank", "Bank", 20, OFFICE_HOURS, 165.0, 9 * H, 17 * H, True),
-        BuildingType("park", "Park", 2, (Shift(7 * H, 15 * H, False),), 80.0, 6 * H, 22 * H),
-        BuildingType("court", "District Court", 12, OFFICE_HOURS, 185.0, 10 * H, 17 * H, True),
-        BuildingType("bus_depot", "Bus depot", 20, (Shift(5 * H, 13 * H, False), Shift(13 * H, 21 * H, False)), 110.0),
+        BuildingType("city_hall", "City Hall", 20, OFFICE_HOURS, 700.0, 9 * H, 17 * H, True),
+        BuildingType("bank", "Bank", 10, OFFICE_HOURS, 850.0, 9 * H, 17 * H, True),
+        BuildingType("park", "Park", 2, (Shift(7 * H, 15 * H, False),), 450.0, 6 * H, 22 * H),
+        BuildingType("court", "District Court", 12, OFFICE_HOURS, 900.0, 10 * H, 17 * H, True),
+        BuildingType("bus_depot", "Bus depot", 20, (Shift(5 * H, 13 * H, False), Shift(13 * H, 21 * H, False)), 600.0),
         # places of worship: priests, caretakers and kitchen volunteers, paid by the trust from offerings
         BuildingType("temple", "Mandir", 4, (Shift(5 * H, 13 * H, False), Shift(13 * H, 21 * H, False)), 85.0, 5 * H, 21 * H + 30),
         BuildingType("mosque", "Masjid", 3, (Shift(4 * H + 30, 12 * H + 30, False), Shift(12 * H + 30, 21 * H, False)), 85.0, 4 * H + 30, 22 * H),
@@ -362,7 +362,7 @@ def _block_layout(rng: np.random.Generator, zone: str, r: float) -> Layout:
     if zone == "park":
         return [("park", full, 0)]
     if zone == "school":
-        return [("school", (0, 0, 1.0, 0.5), 0), ("home", QUADS[2], 6), ("home", QUADS[3], 6)]
+        return [("school", (0, 0, 1.0, 0.5), 0), ("home", QUADS[2], 8), ("home", QUADS[3], 8)]
     if zone == "industrial":
         out: Layout = [("factory", (0, 0, 1.0, 0.5), 0)]
         out.append(("bus_depot" if rng.random() < 0.15 else "factory", (0, 0.5, 1.0, 0.5), 0))
@@ -371,15 +371,15 @@ def _block_layout(rng: np.random.Generator, zone: str, r: float) -> Layout:
         out = []
         for q in QUADS:
             u = rng.random()
-            out.append(("office" if u < 0.45 else "shop" if u < 0.7 else "restaurant" if u < 0.85 else "home", q, 12))
+            out.append(("office" if u < 0.45 else "shop" if u < 0.7 else "restaurant" if u < 0.85 else "home", q, 16))
         return out
     if zone.startswith("worship:"):
-        per = 8 if r < 3.5 else 3
+        per = 10 if r < 3.5 else 4
         return [(zone[8:], QUADS[0], 0)] + [("home", q, per) for q in QUADS[1:]]
     if zone == "local":
-        return [("shop", QUADS[0], 0), ("restaurant", QUADS[1], 0), ("home", QUADS[2], 4), ("home", QUADS[3], 4)]
+        return [("shop", QUADS[0], 0), ("restaurant", QUADS[1], 0), ("home", QUADS[2], 5), ("home", QUADS[3], 5)]
     # residential: apartments nearer the centre, houses further out
-    per = 8 if r < 3.5 else 3
+    per = 10 if r < 3.5 else 4
     return [("home", q, per) for q in QUADS]
 
 

@@ -4,6 +4,7 @@ const MODES: [key: string, label: string, color: string][] = [
   ["walk", "on foot", "#5f8a4a"],
   ["bus", "by bus", "#2c7fb8"],
   ["auto", "by auto", "#e0a21b"],
+  ["scooter", "by scooter", "#8a4fc6"],
   ["car", "by car", "#d2463c"],
 ];
 
@@ -24,6 +25,9 @@ export default function RoadsPanel({ data }: { data: Transport }) {
           </li>
           <li>
             <b>{now.driving}</b> driving
+          </li>
+          <li>
+            <b>{now.on_scooters ?? 0}</b> on scooters
           </li>
           <li>
             <b>{now.in_autos}</b> in autos

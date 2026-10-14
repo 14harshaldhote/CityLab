@@ -80,6 +80,7 @@ class Person:
     job: Job | None = None
     school: int | None = None
     retired: bool = False
+    at_home: bool = False  # not working or looking: studying, keeping house or caring for family
     unemployed_since: int | None = None
     skill: float = 0.3
     health: float = 1.0
@@ -167,6 +168,7 @@ class Household:
     home: int  # building id
     members: list[int]
     has_car: bool
+    has_scooter: bool = False  # a scooter or motorbike: most town families have one
 
 
 def _clamp(v: float) -> float:

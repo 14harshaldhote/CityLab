@@ -89,7 +89,7 @@ def test_what_if_runs_two_cities_side_by_side():
     with client() as c:
         c.post("/api/control", json={"advance_minutes": 8 * 60})
         job = c.post("/api/whatif", json={"lever": "income_tax", "value": 0.4, "days": 3}).json()
-        assert job["status"] == "running" and job["was"] == 0.15
+        assert job["status"] == "running" and job["was"] == 0.05
         deadline = time.time() + 300
         while job["status"] == "running" and time.time() < deadline:
             time.sleep(1)
@@ -99,7 +99,7 @@ def test_what_if_runs_two_cities_side_by_side():
         tax = next(m for m in res["measures"] if m["key"] == "tax")
         assert tax["changed"] > tax["same"] * 1.5  # a far higher tax collects far more
         assert len(res["same_rows"]) == len(res["changed_rows"]) == 3
-        assert 0 <= res["ripple"] <= 1 and res["story"].startswith("Changing the income tax from 15% to 40%")
+        assert 0 <= res["ripple"] <= 1 and res["story"].startswith("Changing the income tax from 5% to 40%")
         assert c.post("/api/whatif", json={"lever": "income_tax", "value": 0.4, "days": 5}).status_code == 422
 
 

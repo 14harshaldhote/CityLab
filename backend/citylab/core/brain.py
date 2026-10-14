@@ -21,6 +21,8 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
+import numpy as np
+
 from .clock import MINUTES_PER_DAY, SimTime
 from .faith import FAITHS, FESTIVAL_SERVICE
 from .health import CHECKUP
@@ -78,6 +80,16 @@ class Brain:
     def __init__(self, world: World) -> None:
         self.w = world
         self.rng = world.streams("brain")
+        self._noise = np.empty(0)
+        self._k = 0
+
+    def _gumbel(self, n: int) -> np.ndarray:
+        """Taste noise for ``n`` options, drawn in big batches (one numpy call per few thousand choices)."""
+        if self._k + n > len(self._noise):
+            self._noise = self.rng.gumbel(0.0, 0.12, 8192)
+            self._k = 0
+        self._k += n
+        return self._noise[self._k - n:self._k]
 
     def decide(self, p: Person, t: int) -> None:
         w = self.w
@@ -145,7 +157,7 @@ class Brain:
                 evening = 0.3 if 19 <= hour < 22 else 0.0
                 options.append((urgency(p.hunger) * 2.2 + 0.3 * p.extraversion + evening - self._far(here, r), EAT_OUT, r, t + 50))
             s = w.nearest_open(here, "shop", t)
-            if s is not None and w.economy.can_afford(p, 60.0):
+            if s is not None and w.economy.can_afford(p, 300.0):
                 options.append((urgency(p.fun) * 1.0 + 0.2 - self._far(here, s), SHOP, s, t + 40))
 
         if not night or adult and hour < 23:
@@ -181,8 +193,8 @@ class Brain:
                 options = [self._sick(p, o) for o in options]
         options = [self._feel(p, o, wx.dark) for o in options]
 
-        noise = self.rng.gumbel(0.0, 0.12, len(options))
-        best = options[max(range(len(options)), key=lambda i: options[i][0] + noise[i])]
+        noise = self._gumbel(len(options)).tolist()
+        best = max(zip(options, noise), key=lambda on: on[0][0] + on[1])[0]
         _, activity, place, until = best
         if activity == WORK:
             p.last_shift = win[0]

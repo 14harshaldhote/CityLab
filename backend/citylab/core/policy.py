@@ -15,8 +15,8 @@ from typing import Any
 @dataclass
 class Policy:
     bus_fare: float = 10.0  # rupees a ride (half for seniors, free under 12)
-    income_tax: float = 0.15  # share of every pay packet
-    benefit: float = 40.0  # rupees a day to someone looking for work
+    income_tax: float = 0.05  # share of every pay packet: most town workers earn below the income-tax line, so about 5% overall
+    benefit: float = 0.0  # rupees a day to someone looking for work; Indian towns pay none
     patrols: float = 1.0  # police cars out, relative to normal
 
     def to_dict(self) -> dict[str, float]:
@@ -33,7 +33,7 @@ LEVERS: dict[str, dict[str, Any]] = {
                  "story": "Cheaper buses pull people out of autos and off their feet; dearer ones push them back."},
     "income_tax": {"name": "Income tax", "unit": "of pay", "options": [0.0, 0.05, 0.15, 0.25, 0.4],
                    "story": "Tax fills the city's budget but leaves families with less to spend."},
-    "benefit": {"name": "Help for people out of work", "unit": "a day", "options": [0.0, 20.0, 40.0, 80.0, 150.0],
+    "benefit": {"name": "Help for people out of work", "unit": "a day", "options": [0.0, 50.0, 100.0, 200.0, 400.0],
                 "story": "Hard times make theft tempting. Does a safety net change that?"},
     "patrols": {"name": "Police patrols", "unit": "the usual number", "options": [0.0, 0.5, 1.0, 2.0, 3.0],
                 "story": "More police cars put more thieves off, and cost the city more fuel."},

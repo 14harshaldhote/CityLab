@@ -1,9 +1,12 @@
 # CityLab: welcome to Kamalnagar
 
-Imagine a toy city that lives by itself. Nobody moves the pieces. Its 2,000
-people wake up, catch the morning rush, go to work and school, grab chai with
-friends, pray, shop, fall in love, have babies and grow old. Your job is simple:
-watch, poke around, and see what happens.
+Imagine a toy town that lives by itself. Nobody moves the pieces. Kamalnagar is
+home to 2 lakh people, the size of a real Indian municipal town. About 5,000 of
+them live on the map, where you can follow every one: they wake up, catch the
+morning rush on their scooters, go to work and school, grab chai with friends,
+pray, shop, fall in love, have babies and grow old. Everyone else is counted in
+the town's books, the way a census counts people. Your job is simple: watch,
+poke around, and see what happens.
 
 CityLab is a playground for understanding the ideas behind today's AI and
 simulation games, by playing with them instead of reading about them. It's
@@ -89,10 +92,32 @@ completely free and runs on your own computer.
     your rules", to pretend to be someone else, or to write you a poem. Its
     shield catches the trick, tells you what it spotted, and answers only the
     real question, if there was one.
+20. **Check it against real India.** The *City* tab puts Kamalnagar next to a
+    real Indian town of the same size: how many children and old people, women
+    for every 1,000 men, births and deaths, unemployment, pay, police, doctors,
+    thefts, scooters and how happy people say they are. Green means close to
+    the real figure. Ask "How does Kamalnagar compare with a real town?" or
+    "What is the population?" to hear it in words.
 
 ![Kamalnagar at night](docs/images/city-night.png)
 
 ## How the city thinks
+
+* **A town in two layers.** Following 2 lakh people minute by minute would need a
+  supercomputer, so Kamalnagar does what a real municipality does. A few thousand
+  people live on the map in full detail, and everyone else is kept in the town's
+  books, neighbourhood by neighbourhood: how many of each age, how many work, study,
+  are ill or have retired. Each night the books move on. Babies are born and people
+  grow older and die at India's real rates, new families move in, and everything
+  else follows what the people on the map did that day, like a survey. Their taxes,
+  bills and services flow through the same city budget, so the town's money is the
+  whole town's money.
+* **Real numbers, not made-up ones.** Wages, rent, the price of a thali, pensions,
+  petrol, family sizes, who works and who stays home, how often people fall ill,
+  how many police and doctors a town has, how often thefts happen and how happy
+  people say they are all come from India's own surveys: the Census, the Sample
+  Registration System, the Periodic Labour Force Survey, NFHS-5, NCRB crime
+  records and the World Happiness Report.
 
 These are the same ideas that power modern games and AI, in plain words.
 
@@ -206,7 +231,7 @@ These are the same ideas that power modern games and AI, in plain words.
 * **Money:** wages, rent, groceries, water bills, taxes, pensions, savings,
   loans, companies that grow or lay people off, and a few that dodge their taxes.
 * **Getting around:** five city bus routes, including a ring road around the
-  centre, with almost 50 stops, plus autos and cars. Streets are named the
+  centre, with almost 50 stops, plus autos, scooters, motorbikes and a few cars. Streets are named the
   Indian way, like M.G. Road, Tilak Road and Gandhi Marg.
 * **People who run the city:** the police and the District Court, the Civil Hospital and its doctors, the Municipal Tax
   Office, a town planning office, a public works department
@@ -271,8 +296,9 @@ cd frontend && npm install && npm run dev
 ```
 
 Then open <http://localhost:5173>. To get a different city, set
-`CITYLAB_SEED` to any number before starting. To start with more or fewer people,
-set `CITYLAB_POPULATION`.
+`CITYLAB_SEED` to any number before starting. To put more or fewer people on the
+map, set `CITYLAB_POPULATION` (5,000 by default; fewer runs faster on a small
+laptop). To change the size of the whole town, set `CITYLAB_TOWN` (2,00,000 by default).
 
 </details>
 

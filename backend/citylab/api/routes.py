@@ -109,6 +109,17 @@ def life(request: Request) -> dict[str, Any]:
                 "tax": {k: tax[k] for k in ("taxpayers", "cash_workers", "cash_books") if k in tax}}
 
 
+@router.get("/town")
+def town(request: Request) -> dict[str, Any]:
+    """The whole town of 2 lakh: the books and the map together, next to a real Indian town of the same size."""
+    r = runner(request)
+    with r.lock:
+        w = r.world
+        out = w.town.view()
+        out["compare"] = w.town.compare()
+        return out
+
+
 @router.get("/frame")
 def frame(request: Request) -> dict[str, Any]:
     return runner(request).frame()

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, liveFrames } from "./api/client";
-import type { Agencies, Life, Safety, Transport, BuildingCard, CityEvent, CityMap as City, DailyRow, Economy, Frame, PersonCard, Summary } from "./api/types";
+import type { Agencies, Life, Safety, Transport, BuildingCard, CityEvent, CityMap as City, DailyRow, Economy, Frame, PersonCard, Summary, Town } from "./api/types";
 import AgenciesPanel from "./components/AgenciesPanel";
 import BuildingPanel from "./components/BuildingPanel";
 import City3D from "./components/City3D";
@@ -14,6 +14,7 @@ import HistoryPanel from "./components/HistoryPanel";
 import RoadsPanel from "./components/RoadsPanel";
 import SafetyPanel from "./components/SafetyPanel";
 import TimeBar from "./components/TimeBar";
+import TownPanel, { lakh } from "./components/TownPanel";
 import { advise } from "./engine/advisor";
 import { LEGEND_KINDS, ROOF } from "./engine/art";
 import { ACTIVITY_COLORS, hex } from "./engine/view";
@@ -52,6 +53,7 @@ export default function App() {
   const [roads, setRoads] = useState<Transport | null>(null);
   const [safety, setSafety] = useState<Safety | null>(null);
   const [life, setLife] = useState<Life | null>(null);
+  const [town, setTown] = useState<Town | null>(null);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<{ id: number; name: string; age: number; activity: string | null }[]>([]);
 
@@ -88,6 +90,7 @@ export default function App() {
   usePoll(() => tab === "roads" && api.transport().then(setRoads, () => undefined), 2000, [tab]);
   usePoll(() => tab === "safety" && api.safety().then(setSafety, () => undefined), 2500, [tab]);
   usePoll(() => tab === "city" && api.life().then(setLife, () => undefined), 5000, [tab]);
+  usePoll(() => tab === "city" && api.town().then(setTown, () => undefined), 5000, [tab]);
   usePoll(() => (tab === "charts" || tab === "city") && api.daily().then(setDaily, () => undefined), 5000, [tab]);
   const tips = useMemo(() => advise(summary, econ, daily), [summary, econ, daily]);
 
@@ -135,6 +138,17 @@ export default function App() {
         { label: "bus rides", color: "#2c7fb8", values: daily.map((d) => d.trips_bus ?? 0) },
         { label: "auto rides", color: "#e0a21b", values: daily.map((d) => d.trips_auto ?? 0) },
         { label: "car trips", color: "#d2463c", values: daily.map((d) => d.trips_car ?? 0) },
+        { label: "scooter trips", color: "#8a4fc6", values: daily.map((d) => d.trips_scooter ?? 0) },
+      ],
+      town: [
+        { label: "babies born", color: "#5f8a4a", values: daily.map((d) => d.town_births ?? 0) },
+        { label: "deaths", color: "#5b6c9e", values: daily.map((d) => d.town_deaths ?? 0) },
+        { label: "moved in", color: "#e3672f", values: daily.map((d) => d.town_arrived ?? 0) },
+        { label: "thefts registered", color: "#b3261e", values: daily.map((d) => d.town_crimes_reported ?? 0) },
+      ],
+      townHealth: [
+        { label: "ill right now (hundreds)", color: "#d4413f", values: daily.map((d) => (d.town_sick ?? 0) / 100) },
+        { label: "doctor visits", color: "#2c7fb8", values: daily.map((d) => d.town_hospital_visits ?? 0) },
       ],
       crime: [
         { label: "thefts", color: "#b3261e", values: daily.map((d) => d.crimes ?? 0) },
@@ -183,8 +197,11 @@ export default function App() {
         </div>
         {summary && (
           <div className="stats">
-            <span className="stat">
-              <b>{summary.population.toLocaleString()}</b> people
+            <span className="stat" title="Everyone in town: the people on the map plus the town's books">
+              <b>{lakh(summary.town_population ?? summary.population)}</b> people
+            </span>
+            <span className="stat" title="The people you can follow on the map">
+              <b>{summary.population.toLocaleString("en-IN")}</b> on the map
             </span>
             <span className="stat">
               <b>{summary.households}</b> households
@@ -329,7 +346,7 @@ export default function App() {
               )}
               {summary?.religions && (
                 <>
-                  <h3>Communities</h3>
+                  <h3>Communities on the map</h3>
                   <ul className="faiths">
                     {Object.entries(summary.religions).map(([label, n]) => (
                       <li key={label}>
@@ -353,6 +370,7 @@ export default function App() {
               <p className="muted small">Click any dot on the map to follow that person, or any building to see who is inside.</p>
             </div>
           )}
+          {tab === "city" && town && <TownPanel town={town} />}
           {tab === "person" && (person ? <PersonPanel card={person} net={net && net.center === person.id ? net : null} onPick={pickPerson} /> : <div className="card muted">Click a person on the map.</div>)}
           {tab === "place" && (building ? <BuildingPanel card={building} onPick={pickPerson} /> : <div className="card muted">Click a building on the map.</div>)}
           {tab === "roads" && (roads ? <RoadsPanel data={roads} /> : <div className="card muted">Counting the traffic...</div>)}
@@ -418,9 +436,12 @@ export default function App() {
           )}
           {tab === "charts" && (
             <div className="card">
-              <h2>People</h2>
+              <h2>The whole town, per day</h2>
+              <LineChart days={chart.days} series={chart.town} height={130} />
+              <LineChart days={chart.days} series={chart.townHealth} height={120} />
+              <h2>People on the map</h2>
               <LineChart days={chart.days} series={chart.people} />
-              <h2>Births, deaths and migration per day</h2>
+              <h2>Births, deaths and migration on the map, per day</h2>
               <LineChart days={chart.days} series={chart.life} height={130} />
               <h2>Money</h2>
               <LineChart days={chart.days} series={chart.money} height={120} />

@@ -51,7 +51,7 @@ class Runner:
 
     def reset(self, seed: int, population: int) -> None:
         with self.lock:
-            self.world = World(seed=seed, population=population)
+            self.world = World(seed=seed, population=population, town=self.settings.town)
             self.store = MemoryStore()
             self.store.on_diverge = self._diverged
             self.history = History()

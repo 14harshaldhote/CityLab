@@ -60,23 +60,23 @@ EXPORTERS = ("office", "factory", "bus_depot")
 RETAIL = ("shop", "restaurant")
 
 SALES_TAX = 0.05
-BUSINESS_TAX = 0.05  # of a company's revenue
+BUSINESS_TAX = 0.01  # of a company's revenue (most business tax goes to the state and the centre, not the town)
 PROPERTY_TAX = 0.10  # of rent collected
 DIVIDEND_SHARE = 0.25  # of cash above a cushion of 30 days' wages, paid to outside shareholders
-PENSION_PER_DAY = 60.0
+PENSION_PER_DAY = 100.0  # about ₹3,000 a month: the state's old-age pension for most, a service pension for some
 BENEFIT_DAYS = 180
-GROCERIES_PER_PERSON = 14.0
-RENT_PER_DAY = {"apartment": 45.0, "house": 70.0}
-MEAL_OUT = 22.0
+GROCERIES_PER_PERSON = 75.0  # food and daily needs; town households spend about ₹7,000 a person a month in all (HCES 2023-24)
+RENT_PER_DAY = {"apartment": 200.0, "house": 330.0}  # ₹6,000 and ₹10,000 a month
+MEAL_OUT = 80.0  # a thali at a local mess
 WHOLESALE_SHARE = 0.4  # what a shop pays the outside world for the goods it sells
 UPKEEP_SHARE = 0.35  # what the landlord spends on upkeep
-OUTPUT_PER_WAGE = 1.4
+OUTPUT_PER_WAGE = 1.4  # how much an average worker's day sells for, relative to their wage
 CASH_JOBS = {"shop": 0.2, "restaurant": 0.25, "construction": 0.35}  # share of hires paid cash in hand at 15% income tax
 CASH_BOOKS = 0.15  # share of shops and restaurants that only declare part of their takings
 DECLARED = 0.5  # the part they declare
 AUDITS_PER_WEEK = 4
 FINE = 0.5
-LANGAR_MEAL = 8.0  # what the gurudwara's free kitchen spends per meal  # how much an average worker's day sells for, relative to their wage
+LANGAR_MEAL = 35.0  # what the gurudwara's free kitchen spends per meal
 
 
 @dataclass(slots=True)
@@ -113,6 +113,8 @@ class Economy:
         self.dodged_today = 0.0
         self.city_in: dict[str, float] = defaultdict(float)  # today's money into and out of the city budget, by purpose
         self.city_out: dict[str, float] = defaultdict(float)
+        self.books_in: dict[str, float] = defaultdict(float)  # the part of those that is the rest of the town (see town.py)
+        self.books_out: dict[str, float] = defaultdict(float)
 
     # ---- accounts -------------------------------------------------------------------
 
@@ -129,10 +131,13 @@ class Economy:
         kind = self.w.city.buildings[bid].kind
         return "city" if kind in PUBLIC else OWN_PAYER.get(kind, self.company(bid))
 
-    def transfer(self, src: str, dst: str, amount: float, purpose: str) -> float:
+    def transfer(self, src: str, dst: str, amount: float, purpose: str, books: bool = False) -> float:
+        """Move money. ``books`` marks the city's dealings with the residents who aren't on the map."""
         amount = round(float(amount), 2)
         if amount <= 0 or src == dst:
             return 0.0
+        if books:
+            (self.books_out if src == "city" else self.books_in)[purpose] += amount
         self.balance[src] = round(self.balance[src] - amount, 2)
         self.balance[dst] = round(self.balance[dst] + amount, 2)
         self.flows[purpose] += amount
@@ -149,12 +154,12 @@ class Economy:
         """Opening balances for the founding city. Called once, after the first people exist."""
         rng = self.rng
         self.balance["outside"] = 0.0
-        self._seed("bank", 1_500_000.0)
-        self._seed("city", 400_000.0)
-        self._seed("landlord", 100_000.0)
+        self._seed("bank", 8_000_000.0)
+        self._seed("city", 1000.0 * self.w.town.total)  # about ₹1,000 a resident in reserve
+        self._seed("landlord", 500_000.0)
         for b in self.w.city.buildings:
             if b.jobs and b.kind not in PUBLIC and b.kind not in OWN_PAYER:
-                self._seed(self.company(b.id), 3000.0 * len(b.jobs) * float(rng.uniform(0.6, 1.4)))
+                self._seed(self.company(b.id), 16_000.0 * len(b.jobs) * float(rng.uniform(0.6, 1.4)))
                 self.credit[self.company(b.id)] = 650.0
                 self.new_books(b)
         for p in self.w.alive():
@@ -171,9 +176,9 @@ class Economy:
         age = p.age(self.w.t)
         if age >= 18:
             days = float(self.rng.lognormal(math.log(25.0), 0.8)) * (1.6 if age >= 40 else 1.0)
-            self._seed(acct, round(days * 110.0, 2))  # savings worth some weeks of wages
+            self._seed(acct, round(days * 580.0, 2))  # savings worth some weeks of wages
         elif founding and age >= 12:
-            self._seed(acct, round(float(self.rng.uniform(0, 300)), 2))
+            self._seed(acct, round(float(self.rng.uniform(0, 1500)), 2))
 
     def close(self, p: Person, reason: str) -> None:
         """A person died or left: their money goes to family (or leaves with them), their loans are settled."""
@@ -263,7 +268,7 @@ class Economy:
     # ---- spending during the day ------------------------------------------------------
 
     def can_afford(self, p: Person, price: float) -> bool:
-        return self.balance[self.person(p.id)] >= price + 50.0
+        return self.balance[self.person(p.id)] >= price + 250.0
 
     def purchase(self, p: Person, bid: int, amount: float, purpose: str) -> None:
         """A sale at a shop or restaurant, with sales tax to the city."""
@@ -275,9 +280,9 @@ class Economy:
 
     def offering(self, p: Person, bid: int) -> None:
         """A voluntary offering (dakshina, sadaqah, collection) from adults who can spare it."""
-        if p.age(self.w.t) < 18 or not self.can_afford(p, 60.0):
+        if p.age(self.w.t) < 18 or not self.can_afford(p, 300.0):
             return
-        amount = float(self.rng.uniform(5, 25)) * (0.5 + p.devotion)
+        amount = float(self.rng.uniform(10, 60)) * (0.5 + p.devotion)
         self.transfer(self.person(p.id), self.company(bid), amount, "offerings")
 
     def langar(self, bid: int) -> None:
@@ -287,7 +292,7 @@ class Economy:
         return MEAL_OUT
 
     def shopping_price(self) -> float:
-        return round(float(self.rng.uniform(15, 60)), 2)
+        return round(float(self.rng.uniform(80, 320)), 2)
 
     # ---- the daily cycle ----------------------------------------------------------------
 
@@ -304,19 +309,24 @@ class Economy:
         self._bank()
         self._companies()
         if self.balance["city"] < 0:
-            self._borrow("city", -self.balance["city"] + 50_000.0, "to cover the city budget")
+            self._borrow("city", -self.balance["city"] + 250_000.0, "to cover the city budget")
         summary = self.summary()
         for k in ("money_people", "money_companies", "city", "loans_outstanding", "gdp"):
             self.history[k].append(summary[k])
         summary["tax_dodged"] = round(self.dodged_today, 2)
         summary["city_in"] = {k: round(v, 2) for k, v in sorted(self.city_in.items(), key=lambda kv: -kv[1])}
         summary["city_out"] = {k: round(v, 2) for k, v in sorted(self.city_out.items(), key=lambda kv: -kv[1])}
+        # the same for the people on the map alone, which the books use to set their own rates
+        summary["map_city_in"] = {k: round(v - self.books_in.get(k, 0.0), 2) for k, v in self.city_in.items() if v - self.books_in.get(k, 0.0) > 0}
+        summary["map_city_out"] = {k: round(v - self.books_out.get(k, 0.0), 2) for k, v in self.city_out.items() if v - self.books_out.get(k, 0.0) > 0}
         summary.update({k: v for k, v in self.dodging().items() if k != "owed"})
         self.attendance = defaultdict(list)
         self.company_sales = defaultdict(float)
         self.flows = defaultdict(float)
         self.city_in = defaultdict(float)
         self.city_out = defaultdict(float)
+        self.books_in = defaultdict(float)
+        self.books_out = defaultdict(float)
         self.dodged_today = 0.0
         assert abs(self.total() - self.total0) < 0.5, f"money leaked: {self.total() - self.total0} at {t}"
         return summary
@@ -416,7 +426,7 @@ class Economy:
             if b.kind in PUBLIC or b.kind in OWN_PAYER or b.status != "open":
                 continue
             acct = self.company(bid)
-            cushion = 30 * sum(w.people[q].job.wage for q in holders if w.people[q].job) + 5000.0
+            cushion = 30 * sum(w.people[q].job.wage for q in holders if w.people[q].job) + 25_000.0
             if self.balance[acct] > cushion:
                 purpose = "festivals, upkeep and charity" if b.kind in TRUSTS else "dividends"
                 self.transfer(acct, "outside", (self.balance[acct] - cushion) * DIVIDEND_SHARE, purpose)
@@ -461,9 +471,9 @@ class Economy:
                 pid = int(acct[2:])
                 if pid not in w.people or not w.people[pid].alive:
                     continue
-            need = -self.balance[acct] + 300.0
+            need = -self.balance[acct] + 1500.0
             behind = any(l.missed for l in self.loans.values() if l.account == acct)
-            if not behind and self.credit.get(acct, 600.0) >= 560.0 and self._debt(acct) < 20_000.0:
+            if not behind and self.credit.get(acct, 600.0) >= 560.0 and self._debt(acct) < 100_000.0:
                 self._borrow(acct, need, "to cover an overdraft")
             else:
                 self.credit[acct] = max(300.0, self.credit.get(acct, 600.0) - 2.0)

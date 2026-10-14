@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from .clock import DAYS_PER_YEAR, MINUTES_PER_DAY, MINUTES_PER_YEAR, SimTime
+from . import realworld as rw
 from . import reports
 from .health import nightly_happiness
 from .faith import festival_on
@@ -98,6 +99,9 @@ def end_of_day(w: World) -> None:
     row.update(health)
     row.update(nightly_happiness(w))
     row.update(w.mind.nightly())
+    books = w.town.nightly(row)  # the rest of the town follows, then town totals = books + map
+    row.update(w.town.row(row, books))
+    row["town_happiness"] = row.get("happiness")
     row["day"] = SimTime(t).day
     row["clustering"] = w.social.clustering() if SimTime(t).day % 7 == 0 else (w.daily[-1]["clustering"] if w.daily else 0.0)
     w.daily.append(row)
@@ -134,10 +138,22 @@ def _birthday(w: World, p: Person, t: int) -> None:
         school = w.city.buildings[p.school].name
         w.unenrol(p)
         p.skill = min(1.0, p.skill + 0.15)
-        p.unemployed_since = t
-        w.emit("graduated", f"{p.name} finished school at {school} and is looking for work.", (p.id,))
-    elif age == 65 and not p.retired:
+        if w.streams("life").random() < rw.work_force_share(18, p.sex):
+            p.unemployed_since = t
+            w.emit("graduated", f"{p.name} finished school at {school} and is looking for work.", (p.id,))
+        else:
+            p.at_home = True
+            w.emit("graduated", f"{p.name} finished school at {school} and went on to college.", (p.id,))
+    elif age == 25 and p.at_home and not p.retired:
+        # most young men start work after college; few women who stayed home start now
+        before, after = rw.work_force_share(18, p.sex), rw.work_force_share(30, p.sex)
+        if w.streams("life").random() < (after - before) / max(1e-9, 1.0 - before):
+            p.at_home = False
+            p.unemployed_since = t
+    elif not p.retired and (age == rw.LAST_WORKING_AGE or age == rw.RETIREMENT_AGE and (
+            p.at_home or p.job is None or w.streams("life").random() >= rw.work_force_share(60, p.sex) * 1.6)):
         p.retired = True
+        p.at_home = False
         place = w.city.buildings[p.job.building].name if p.job else None
         w.fire(p)
         p.unemployed_since = None
@@ -171,7 +187,7 @@ def _leave_household(w: World, p: Person) -> None:
 
 
 def _jobs(w: World, rng: np.random.Generator, alive: list[Person]) -> None:
-    seekers = [p for p in alive if p.job is None and not p.retired and p.school is None and 18 <= p.age(w.t) < 65]
+    seekers = [p for p in alive if p.job is None and not p.retired and not p.at_home and p.school is None and 18 <= p.age(w.t) < rw.LAST_WORKING_AGE]
     if not seekers:
         return
     vac = w.vacancies()
@@ -227,6 +243,7 @@ def _move_in(w: World, rng: np.random.Generator, a: Person, b: Person) -> None:
     if not src.members and src.id in w.occupancy[src.home]:
         w.occupancy[src.home].remove(src.id)
     dst.has_car = dst.has_car or src.has_car
+    dst.has_scooter = dst.has_scooter or src.has_scooter
     w.emit("moved", f"{mover.name} moved in with {stay.name} at {w.city.buildings[dst.home].name}.", (mover.id, stay.id), dst.home)
 
 
@@ -263,7 +280,7 @@ def _leave_home(w: World, rng: np.random.Generator, alive: list[Person]) -> None
         if home is None:
             return
         hh.members.remove(p.id)
-        new = w.new_household(home, has_car=bool(rng.random() < 0.3))
+        new = w.new_household(home, has_car=bool(rng.random() < rw.CAR_OWNERS * 0.6), has_scooter=bool(rng.random() < rw.SCOOTER_OWNERS))
         new.members.append(p.id)
         p.household = new.id
         w.emit("moved_out", f"{p.name} left the family home and moved to {w.city.buildings[home].name}.", (p.id,), home)
@@ -272,7 +289,7 @@ def _leave_home(w: World, rng: np.random.Generator, alive: list[Person]) -> None
 def _migration(w: World, rng: np.random.Generator) -> None:
     t = w.t
     alive = w.alive()
-    seekers = sum(1 for p in alive if p.job is None and not p.retired and p.school is None and 18 <= p.age(t) < 65)
+    seekers = sum(1 for p in alive if p.job is None and not p.retired and not p.at_home and p.school is None and 18 <= p.age(t) < rw.LAST_WORKING_AGE)
     open_jobs = len(w.vacancies())
     free_homes = sum(w.city.buildings[b].households - len(o) for b, o in w.occupancy.items())
     pull = max(0, open_jobs - seekers)
@@ -285,7 +302,7 @@ def _migration(w: World, rng: np.random.Generator) -> None:
         home = w.free_home(rng, near=near)
         if home is None:
             break
-        hh = w.new_household(home, has_car=bool(rng.random() < 0.4))
+        hh = w.new_household(home, has_car=bool(rng.random() < rw.CAR_OWNERS), has_scooter=bool(rng.random() < rw.SCOOTER_OWNERS))
         last = None
         a = 22 + int(rng.integers(0, 22))
         faith = pick_religion(rng)
@@ -308,7 +325,10 @@ def _migration(w: World, rng: np.random.Generator) -> None:
             if 6 <= m.age(t) < 18:
                 w.enrol(m)
             elif m.age(t) >= 18:
-                m.unemployed_since = t
+                if rng.random() < rw.work_force_share(m.age(t), m.sex):
+                    m.unemployed_since = t
+                else:
+                    m.at_home = True
         if anchor is not None:
             w.social.tie(first.id, anchor, "friend", 0.5)
         w.today.arrived += len(members)
@@ -318,7 +338,7 @@ def _migration(w: World, rng: np.random.Generator) -> None:
 
     # long-term unemployed households may give up and leave
     for hh in list(w.households.values()):
-        adults = [w.people[q] for q in hh.members if w.people[q].age(t) >= 18 and not w.people[q].retired]
+        adults = [w.people[q] for q in hh.members if w.people[q].age(t) >= 18 and not w.people[q].retired and not w.people[q].at_home]
         if not adults or any(a.job for a in adults):
             continue
         if all(a.unemployed_since is not None and t - a.unemployed_since > 120 * MINUTES_PER_DAY for a in adults) and rng.random() < 0.3:

@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from citylab.ask.search import Index, blend, tokens
 from citylab.ask.understand import understand
 from citylab.config import Settings
-from citylab.core import reports
+from citylab.core import crime, reports
 from citylab.core.clock import MINUTES_PER_DAY
 from citylab.core.events import Event
 from citylab.main import create_app
@@ -22,7 +22,11 @@ DISTRICTS = ["Shivaji Nagar", "Kamal Chowk", "Nadi Kinara"]
 @pytest.fixture(scope="module")
 def runner():
     r = Runner(Settings(seed=6, population=300, start_playing=False, database_url="", ollama_url=""))
-    r.step(9 * DAY + 11 * 60)
+    with pytest.MonkeyPatch.context() as mp:
+        # a crime-ridden test town, so there are thefts to ask about: every adult is a little tempted
+        mp.setattr(crime, "ATTEMPT", 0.025)
+        mp.setattr(crime, "temptation", lambda p, balance, debt, t: 0.02 if 18 <= p.age(t) < 70 else 0.0)
+        r.step(9 * DAY + 11 * 60)
     return r
 
 

@@ -19,8 +19,8 @@ CAR_M_PER_MIN = 420.0  # ~25 km/h in town with no traffic (see transport.py for 
 CAR_MIN_DISTANCE_M = 1200.0
 
 # how someone moves along each piece of a trip
-WALK, CAR, BUS, AUTO, WAIT = 1, 2, 3, 4, 5
-LEG_NAMES = {0: "", WALK: "walking", CAR: "driving", BUS: "on a bus", AUTO: "in an auto", WAIT: "waiting"}
+WALK, CAR, BUS, AUTO, WAIT, SCOOTER = 1, 2, 3, 4, 5, 6
+LEG_NAMES = {0: "", WALK: "walking", CAR: "driving", BUS: "on a bus", AUTO: "in an auto", WAIT: "waiting", SCOOTER: "on a scooter"}
 
 
 @dataclass(slots=True)
@@ -32,7 +32,7 @@ class Trip:
     points: list[tuple[float, float]]
     times: list[float]  # absolute minute at each point, never decreasing
     legs: list[int]  # how they move along each segment (WALK, CAR, BUS, AUTO, WAIT)
-    mode: str  # "walk" | "car" | "bus" | "auto"
+    mode: str  # "walk" | "car" | "bus" | "auto" | "scooter"
     line: str | None = None  # bus route number
     run: object | None = None  # the bus they ride
     stop: str | None = None  # the stop they get on at

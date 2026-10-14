@@ -150,7 +150,7 @@ class Mind:
         elif lever == "income_tax":
             effect = {"taxes": float(np.clip((was - value) * 3.0, -0.6, 0.6)), "council": float(np.clip((was - value) * 1.5, -0.3, 0.3))}
         elif lever == "benefit":
-            effect = {"council": float(np.clip((value - was) / 200.0, -0.3, 0.3))}
+            effect = {"council": float(np.clip((value - was) / 1000.0, -0.3, 0.3))}
         elif lever == "patrols":
             effect = {"police": float(np.clip((value - was) * 0.1, -0.2, 0.2))}
         for p in self.w.alive():
@@ -194,7 +194,7 @@ class Mind:
             def add(f: str, d: float) -> None:
                 feel[f] = feel.get(f, 0.0) + d
 
-            if econ.balance.get(acct, 0.0) < 200:
+            if econ.balance.get(acct, 0.0) < 1000:
                 add("fear", 0.12)
                 add("sadness", 0.05)
             if econ._debt(acct) > 0:
@@ -249,7 +249,7 @@ class Mind:
             else:
                 target = 0.1 - 1.0 * (rate - 0.1) + 0.3 * services
             target_police = 0.35 - 0.12 * thefts.get(district, 0) - (0.3 if p.record else 0.0)
-            target_buses = 0.4 - (commute - 12.0) / 15.0 - (w.policy.bus_fare - 10.0) / 40.0 if not w.households[p.household].has_car else 0.1
+            target_buses = 0.4 - (commute - 12.0) / 15.0 - (w.policy.bus_fare - 10.0) / 40.0 if not (w.households[p.household].has_car or w.households[p.household].has_scooter) else 0.1
             looking = p.job is None and p.unemployed_since is not None and not p.retired
             target_jobs = -0.5 if looking else 0.3
             target_council = 0.2 * (o.get("jobs", 0.0) + o.get("taxes", 0.0) + services) - (0.4 if homes_full > 0.95 else 0.0)

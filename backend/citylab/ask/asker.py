@@ -52,6 +52,9 @@ DAILY = {
     "traffic": ("late", "person was late for work", "people were late for work"),
     "buses": ("trips_bus", "bus ride was taken", "bus rides were taken"),
 }
+# the same counts for the whole town (the books plus the map), where the town keeps them
+TOWN_DAILY = {"births": "town_births", "deaths": "town_deaths", "arrived": "town_arrived", "crimes_reported": "town_crimes_reported",
+              "arrests": "town_arrests"}
 # how interesting each kind of record is when nothing more specific was asked
 WEIGHT = {"crime": 5, "birth": 5, "death": 5, "couple": 4, "opened": 4, "festival": 4, "arrest": 4, "court": 4, "report": 4, "policy": 4,
           "laid_off": 3, "default": 3, "cctv": 3, "zoning": 3, "roads": 3, "arrived": 2, "left": 2, "moved": 2, "loan": 2, "released": 2,
@@ -306,7 +309,12 @@ class Asker:
         for kind in counted[:3]:
             _, one, many = DAILY[kind]
             n = self._count(q, w, now, upto, kind)
-            facts.append(f"{n:,} {one if n == 1 else many}{where} {when}.")
+            town = self._town_count(q, w, kind, n)
+            if town is not None and town != n:
+                facts.append(f"{town:,} {one if town == 1 else many} across the whole town {when}, {n:,} of them among the "
+                             f"{len(w.alive()):,} people on the map.")
+            else:
+                facts.append(f"{n:,} {one if n == 1 else many}{where} {when}.")
             if n == 0 and q.window and q.intent == "how_many":
                 before = self._matching(Question(q.text, [], end=q.start, start=0, districts=q.districts, people=q.people), w, upto, [kind])
                 if before:
@@ -426,6 +434,8 @@ class Asker:
             out += figures.failures(w, events)
         if "rich" in subj:
             out += figures.rich(w)
+        if "town" in subj and not q.people and not q.districts:
+            out += figures.town(w)
         if "story" in subj:
             out += figures.story(w)
         if "council" in subj and "opinions" not in subj:
@@ -448,12 +458,23 @@ class Asker:
             n += len(self._matching(today, w, upto, [kind]))
         return n
 
+    def _town_count(self, q: Question, w: Any, kind: str, on_map: int) -> int | None:
+        """The whole town's count for the same days, or None when the question is about one place or person."""
+        key = DAILY[kind][0]
+        if q.districts or q.people or key not in TOWN_DAILY:
+            return None
+        rows = self._rows(w, q)
+        if not rows or not any(TOWN_DAILY[key] in r for r in rows):
+            return None
+        return on_map + int(sum(float(r.get(TOWN_DAILY[key]) or 0) - float(r.get(key) or 0) for r in rows))
+
     @staticmethod
     def _brief(w: Any, p: Any, now: int) -> str:
         district = w.city.buildings[w.households[p.household].home].district
         age = p.age(now)
         doing = (f"works at {w.city.buildings[p.job.building].name}" if p.job is not None else "is retired" if p.retired
-                 else "is at school" if p.school is not None else "is a small child" if age < 6 else "is looking for work" if age >= 18
+                 else "is at school" if p.school is not None else "is a small child" if age < 6 else ("is at college" if age < 25 else "keeps house") if p.at_home
+                 else "is looking for work" if age >= 18
                  else "is a child")
         known = p.known_for
         fame = "" if not known else f", {known}" if known.startswith(("a ", "known")) else f", who {known}"
@@ -471,6 +492,8 @@ class Asker:
             s.append(f"They go to {card['school']}.")
         elif card["retired"]:
             s.append("They are retired.")
+        elif card.get("at_home"):
+            s.append("They are at college." if p.age(now) < 25 else "They keep house and look after the family.")
         elif card["unemployed"]:
             s.append("They are looking for work.")
         family = []
@@ -531,8 +554,10 @@ class Asker:
         cases = [c for c in w.crime.cases.values() if c.reported
                  and (q.start is None or q.start <= c.t < q.end) and c.t <= now
                  and (not q.districts or (c.building is not None and w.city.buildings[c.building].district in q.districts))]
+        hard = "In Kamalnagar, hard times are what make theft tempting: running short of money, owing the bank, or losing a job."
         if not cases:
-            return []
+            return [f"No thefts were reported on the map{' then' if q.start is not None else ' yet'}: in a real Indian town a few thousand "
+                    "people go months between registered thefts.", hard]
         econ = w.economy
         known = [c for c in cases if c.status in ("awaiting trial", "convicted", "acquitted")]
         kinds = Counter(c.kind for c in cases)
@@ -540,12 +565,12 @@ class Asker:
                + ", ".join(f"{n} {KIND_WORDS.get(k, k)}" for k, n in kinds.most_common()) + "."]
         if known:
             people = [w.people[c.offender] for c in known if c.offender in w.people]
-            jobless = sum(1 for p in people if p.job is None and not p.retired)
+            jobless = sum(1 for p in people if p.job is None and p.unemployed_since is not None)
             debt = sum(1 for p in people if econ._debt(econ.person(p.id)) > 0)
-            broke = sum(1 for p in people if econ.balance.get(econ.person(p.id), 0) < 500)
+            broke = sum(1 for p in people if econ.balance.get(econ.person(p.id), 0) < 2500)
             out.append(f"Of the {_of(len(people), 'suspect', 'suspects')} the police identified, {jobless} {_was(jobless)} out of work, "
-                       f"{debt} owed the bank money and {broke} had less than ₹500 saved.")
-        out.append("In Kamalnagar, hard times are what make theft tempting: running short of money, owing the bank, or losing a job.")
+                       f"{debt} owed the bank money and {broke} had less than ₹2,500 saved.")
+        out.append(hard)
         solved = sum(1 for c in cases if c.status in ("awaiting trial", "convicted"))
         cctv = sum(1 for c in cases if c.cctv)
         arrests = f"{solved} of them led to an arrest" if solved else "None of them has led to an arrest yet"

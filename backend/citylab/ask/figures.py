@@ -13,6 +13,7 @@ from ..core.agencies import SITE_WAGE
 from ..core.clock import MINUTES_PER_DAY, SimTime
 from ..core.health import CHECKUP, happiness_view, is_doctor
 from ..core.mind import TOPIC_WORDS, TOPICS, feeling_word, opinion_word, score10
+from ..core.realworld import THEFTS_PER_LAKH as REAL_THEFTS
 
 # event kinds that tell each subject's story, for the records shown as sources
 SUBJECT_KINDS: dict[str, tuple[str, ...]] = {
@@ -28,6 +29,7 @@ SUBJECT_KINDS: dict[str, tuple[str, ...]] = {
     "health": ("treated", "sick"),
     "tax": ("tax_audit", "policy"),
     "council": ("policy", "zoning"),
+    "town": ("founded", "report"),
 }
 
 SPEND_WORDS = {
@@ -38,11 +40,11 @@ SPEND_WORDS = {
 }
 INCOME_WORDS = {"income tax": "income tax", "business tax": "business tax", "property tax": "property tax", "sales tax": "sales tax",
                 "water bills": "water bills", "bus fares": "bus fares", "hospital fees": "hospital fees", "court fines": "court fines",
-                "back taxes and fines": "back taxes and fines from audits"}
+                "back taxes and fines": "back taxes and fines from audits", "state grants": "grants from the state"}
 
 
 def rs(v: float) -> str:
-    return f"₹{v:,.0f}"
+    return f"₹{lakh(v)}"
 
 
 def _last(w: Any, days: int = 30) -> list[dict[str, Any]]:
@@ -68,7 +70,9 @@ def budget(w: Any) -> list[str]:
     top = ", ".join(f"{SPEND_WORDS.get(k, k)} {rs(v)}" for k, v in out_.most_common(6))
     inc = ", ".join(f"{INCOME_WORDS.get(k, k)} {rs(v)}" for k, v in in_.most_common(6))
     debt = sum(l.balance for l in w.economy.loans.values() if l.account == "city")
-    s = [f"Running Kamalnagar cost {rs(spent)} over the last {n} days, about {rs(spent / n)} a day. The biggest costs: {top}.",
+    people = rows[-1].get("town_population") or len(w.alive())
+    s = [f"Running Kamalnagar, a town of {lakh(people)} people, cost {rs(spent)} over the last {n} days, about {rs(spent / n)} a day "
+         f"({rs(spent / n / people * 365)} a person a year). The biggest costs: {top}.",
          f"It took in {rs(took)}: {inc}.",
          f"The city now has {rs(w.economy.balance['city'])} in its budget" + (f" and owes City Bank {rs(debt)}." if debt else " and no debts.")]
     return s
@@ -165,7 +169,7 @@ def rich(w: Any) -> list[str]:
     s = []
     if top:
         def job(p: Any) -> str:
-            return f"works at {w.city.buildings[p.job.building].name}" if p.job else "is retired" if p.retired else "has no job"
+            return f"works at {w.city.buildings[p.job.building].name}" if p.job else "is retired" if p.retired else "stays at home" if p.at_home else "has no job"
         s.append("The richest people: " + "; ".join(f"{p.name}, {rs(econ.balance.get(econ.person(p.id), 0.0))} in the bank, {job(p)}"
                                                 for p in top) + ".")
     celebs = w.mind.celebrities(5)
@@ -202,6 +206,12 @@ def health(w: Any, behaviour: bool = False) -> list[str]:
         s.append(f"Dr. {busiest['name']} is the busiest ({busiest['patients']} patients). Dr. {kindest['name']} is the kindest "
                  f"(patients rate their manner {kindest['kindness'] * 10:.1f}/10). Dr. {careful['name']} takes longest, {careful['minutes']:.0f} "
                  f"minutes a patient, and Dr. {quick['name']} is quickest at {quick['minutes']:.0f}.")
+    rows = _last(w)
+    if rows and rows[-1].get("town_sick") is not None:
+        total = rows[-1]["town_population"]
+        s.append(f"Across the whole town, {lakh(rows[-1]['town_sick'])} of {lakh(total)} people are ill ({100 * rows[-1]['town_sick'] / total:.1f}%), "
+                 f"{lakh(_town_sum(rows, 'fell_ill'))} fell ill in the last {len(rows)} days and doctors saw {lakh(_town_sum(rows, 'hospital_visits'))} "
+                 f"patients. A town this size has about {lakh(w.town.services(total)['doctors'])} doctors.")
     if behaviour:
         s.extend(doctor_behaviour(w))
     return s
@@ -259,11 +269,19 @@ def plans(w: Any) -> list[str]:
 def police(w: Any) -> list[str]:
     sv = w.crime.view()
     pol, m = sv["police"], sv["month"]
-    s = [f"{w.city.buildings[next(b.id for b in w.city.buildings if b.kind == 'police')].name} has "
+    s = [f"On the map, {w.city.buildings[next(b.id for b in w.city.buildings if b.kind == 'police')].name} has "
          f"{len(w.job_holders.get(next(b.id for b in w.city.buildings if b.kind == 'police'), []))} officers; {pol['on_duty']} are on duty now "
          f"with {pol['patrols']} patrol {'car' if pol['patrols'] == 1 else 'cars'} out, and the city has {pol['cameras']} CCTV cameras.",
          f"In the last 30 days there were {m['crimes']} thefts, {m['reported']} reported to the police; {m['solved']} have been solved, "
          f"{m['solved_with_cctv']} of them with CCTV footage. {rs(m['stolen'])} was stolen in all."]
+    rows = _last(w)
+    if rows and rows[-1].get("town_crimes") is not None:
+        total = rows[-1]["town_population"]
+        reg = _town_sum(rows, "crimes_reported")
+        s.append(f"Across the whole town of {lakh(total)} people, police registered {lakh(reg)} thefts in the last {len(rows)} days and made "
+                 f"{lakh(_town_sum(rows, 'arrests'))} arrests: {1e5 * reg * 365 / len(rows) / total:.0f} thefts per lakh people a year, "
+                 f"against {REAL_THEFTS:.0f} in real India. Most petty thefts are never reported, so the real number is higher: about "
+                 f"{lakh(_town_sum(rows, 'crimes'))}. The town has about {lakh(w.town.services(total)['police'])} police in all.")
     s.append(f"{len(sv['in_jail'])} {'person is' if len(sv['in_jail']) == 1 else 'people are'} in jail and {len(sv['court'])} "
              f"{'case is' if len(sv['court']) == 1 else 'cases are'} waiting for court.")
     poll = w.mind.poll.get("overall") or {}
@@ -300,12 +318,14 @@ def story(w: Any) -> list[str]:
     rows = w.daily
     start = SimTime(0).datetime
     s = [f"{w.city.name} was founded on {start:%-d %B %Y} with {rows[0]['population'] - (rows[0].get('arrived') or 0) if rows else len(w.alive()):,} "
-         f"people around Kamal Talav, the lotus lake. It has now run for {len(rows)} days and has {len(w.alive()):,} people."]
+         f"people on the map around Kamal Talav, the lotus lake, in a town of {lakh(w.town.total)}. It has now run for {len(rows)} days and has "
+         f"{lakh(rows[-1].get('town_population') or len(w.alive())) if rows else lakh(w.town.total)} people, {len(w.alive()):,} of them on the map."]
     if rows:
-        s.append(f"Since then {int(_sum(rows, 'births'))} babies were born, {int(_sum(rows, 'couples'))} couples got together, "
+        s.append(f"Since then {lakh(_town_sum(rows, 'births'))} babies were born across the town and {lakh(_town_sum(rows, 'arrived'))} people "
+                 f"moved in. On the map {int(_sum(rows, 'births'))} babies were born, {int(_sum(rows, 'couples'))} couples got together, "
                  f"{int(_sum(rows, 'arrived'))} people moved in and {int(_sum(rows, 'left'))} left; "
                  + (f"{len(w.government.finished)} new buildings opened" if w.government.finished else "no new buildings have opened yet")
-                 + f", and police recorded {int(_sum(rows, 'crimes_reported'))} thefts.")
+                 + f", and police recorded {int(_sum(rows, 'crimes_reported'))} thefts there ({lakh(_town_sum(rows, 'crimes_reported'))} town-wide).")
     from ..core import reports
 
     reps = reports.reports(rows, w.government.finished, w.city.name, "month") if rows else []
@@ -412,9 +432,9 @@ def in_group(w: Any, p: Any, g: str) -> bool:
     if g == "teachers":
         return p.job is not None and w.city.buildings[p.job.building].kind == "school"
     if g == "poor":
-        return econ.balance.get(econ.person(p.id), 0.0) < 500
+        return econ.balance.get(econ.person(p.id), 0.0) < 2500
     if g == "rich":
-        return econ.balance.get(econ.person(p.id), 0.0) >= 10000
+        return econ.balance.get(econ.person(p.id), 0.0) >= 50_000
     return False
 
 
@@ -518,7 +538,7 @@ def extremes(w: Any, feeling: str, events: list[Any], k: int = 3) -> list[str]:
             reasons.append(f"lately: {e.text.rstrip('.')}")
         if p.job is None and p.unemployed_since is not None and not p.retired and w.t - p.unemployed_since >= MINUTES_PER_DAY:
             reasons.append(f"out of work for {(w.t - p.unemployed_since) // MINUTES_PER_DAY} days")
-        if econ.balance.get(acct, 0.0) < 200:
+        if econ.balance.get(acct, 0.0) < 1000:
             reasons.append(f"only {rs(econ.balance.get(acct, 0.0))} in the bank")
         if econ._debt(acct) > 0:
             reasons.append("in debt to City Bank")
@@ -650,7 +670,8 @@ def trend(w: Any) -> list[str]:
     def tot(rs_: list[dict[str, Any]], k: str) -> float:
         return sum(float(r.get(k) or 0) for r in rs_)
 
-    s = [f"Comparing the first {span} with the last {n} days: population {a[-1]['population']:,} → {b[-1]['population']:,}; happiness "
+    pop = "town_population" if b[-1].get("town_population") else "population"
+    s = [f"Comparing the first {span} with the last {n} days: population {lakh(a[-1].get(pop) or a[-1]['population'])} → {lakh(b[-1][pop])}; happiness "
          f"{avg(a, 'happiness'):.0f} → {avg(b, 'happiness'):.0f}; thefts {tot(a, 'crimes'):.0f} → {tot(b, 'crimes'):.0f} a {span}; people looking for "
          f"work {a[-1].get('unemployed', 0)} → {b[-1].get('unemployed', 0)}; ill {avg(a, 'sick'):.0f} → {avg(b, 'sick'):.0f}; the trip to work "
          f"{avg(a, 'commute_min'):.1f} → {avg(b, 'commute_min'):.1f} minutes; the city's budget {rs(a[-1].get('city', 0))} → {rs(b[-1].get('city', 0))}."]
@@ -698,3 +719,56 @@ def runway(w: Any) -> list[str]:
 __all__ = ["SUBJECT_KINDS", "budget", "by_group", "cctv", "council", "doctor_mistakes", "dodgers", "extremes", "fairness",
            "friends_of", "happiness_where", "hospital_hours", "runway", "theft_by_district", "trend", "whatif", "doctor_behaviour", "failures", "feelings", "happiness", "health", "opinions",
            "people_and_police", "plans", "police", "rich", "story", "tax", "feeling_word", "opinion_word", "score10", "is_doctor", "CHECKUP"]
+
+
+# ---- the whole town -------------------------------------------------------------------------------------
+
+def lakh(n: float) -> str:
+    """A whole number written the Indian way: 2,00,000 rather than 200,000."""
+    s = str(int(round(n)))
+    neg, s = s.startswith("-"), s.lstrip("-")
+    if len(s) > 3:
+        head, tail = s[:-3], s[-3:]
+        groups = []
+        while len(head) > 2:
+            groups.insert(0, head[-2:])
+            head = head[:-2]
+        s = ",".join(([head] if head else []) + groups) + "," + tail
+    return ("-" if neg else "") + s
+
+
+def _town_sum(rows: list[dict[str, Any]], key: str) -> int:
+    """A town-wide total over these days: the town's own figure, or the map's where a day has none."""
+    return int(sum(float(r.get(f"town_{key}", r.get(key)) or 0) for r in rows))
+
+
+def town(w: Any) -> list[str]:
+    """The whole town in figures, next to a real Indian town of the same size."""
+    from ..core import realworld as rw
+
+    tv = w.town.view()
+    rows = _last(w)
+    total, on_map = tv["population"], tv["on_map"]
+    ages = tv["ages"]
+    young = ages.get("under 6", 0) + ages.get("6 to 17", 0)
+    s = [f"Kamalnagar is a town of {lakh(total)} people in about {lakh(tv['households'])} households. {lakh(on_map)} of them live on the map, "
+         f"where you can follow each one; the rest are counted in the town's books, neighbourhood by neighbourhood, the way a census would.",
+         f"{young * 100 / max(1, total):.0f}% are children, {ages.get('60 and over', 0) * 100 / max(1, total):.0f}% are 60 or older, and there are "
+         f"{tv['women_per_1000_men']} women for every 1,000 men (real Indian towns: {100 * (rw.AGE_SHARES[0] + rw.AGE_SHARES[1]):.0f}% children, "
+         f"{100 * rw.AGE_SHARES[-1]:.0f}% over 60, {1000 * (1 - rw.MALE_SHARE) / rw.MALE_SHARE:.0f} women per 1,000 men)."]
+    if rows and rows[-1].get("town_employed") is not None:
+        r = rows[-1]
+        force = r["town_employed"] + r["town_unemployed"]
+        s.append(f"{lakh(r['town_employed'])} people work and {lakh(r['town_unemployed'])} are looking for work, so unemployment is "
+                 f"{100 * r['town_unemployed'] / max(1, force):.1f}% (India's towns: {100 * rw.UNEMPLOYMENT:.1f}%). {lakh(r['town_pupils'])} are at school "
+                 f"or college and {lakh(r['town_retired'])} have retired.")
+        n = len(rows)
+        per_year = 365.0 / n
+        births, deaths = _town_sum(rows, "births"), _town_sum(rows, "deaths")
+        thefts = _town_sum(rows, "crimes_reported")
+        s.append(f"In the last {n} days {lakh(births)} babies were born and {lakh(deaths)} people died, {1000 * births * per_year / total:.1f} births and "
+                 f"{1000 * deaths * per_year / total:.1f} deaths per 1,000 people a year (real: {rw.BIRTHS_PER_1000:.0f} and {rw.DEATHS_PER_1000:.1f}). "
+                 f"Police registered {lakh(thefts)} thefts, {1e5 * thefts * per_year / total:.0f} per lakh people a year (real: {rw.THEFTS_PER_LAKH:.0f}).")
+    sv = tv["services"]
+    s.append(f"A town this size has about {lakh(sv['police'])} police, {lakh(sv['doctors'])} doctors and {lakh(sv['teachers'])} teachers.")
+    return s

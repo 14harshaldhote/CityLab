@@ -1,5 +1,5 @@
 import type { Network } from "../components/EgoGraph";
-import type { Agencies, Answer, AskStatus, CityReport, History, Safety, WhatIfJob, Transport, BuildingCard, CityEvent, Economy, CityMap, DailyRow, Frame, PersonCard, Summary, Life } from "./types";
+import type { Agencies, Answer, AskStatus, CityReport, History, Safety, WhatIfJob, Transport, BuildingCard, CityEvent, Economy, CityMap, DailyRow, Frame, PersonCard, Summary, Life, Town } from "./types";
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(path);
@@ -51,6 +51,7 @@ export const api = {
   transport: () => get<Transport>("/api/transport"),
   safety: () => get<Safety>("/api/safety"),
   life: () => get<Life>("/api/life"),
+  town: () => get<Town>("/api/town"),
   history: () => get<History>("/api/history"),
   travel: (t: number) => post<{ t: number; label: string; seconds: number }>("/api/travel", { t }),
   setRule: (lever: string, value: number) => post<Record<string, number>>("/api/rules", { lever, value }),
