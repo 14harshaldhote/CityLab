@@ -112,6 +112,14 @@ completely free and runs on your own computer.
     labourers waiting at the labour naka at seven, hoping a builder picks them.
     Ask "How much does a street vendor earn?" or "How many labourers got work
     today?".
+23. **Hear what's bothering people.** A little box over the city shows the
+    latest grumbles, and the *City* tab counts what's weighing on everyone
+    who's unhappy: low pay, money running out, a long hospital queue, a theft
+    on their street, or just a bad mood. Nobody writes these lines; each one
+    comes from what the town actually did to that person. And everyone has
+    their own limits: some fume at a 40-minute queue, others shrug it off.
+    Click a name to see their temperament and what's on their mind, or ask
+    "Why are people unhappy?".
 
 ![Kamalnagar at night](docs/images/city-night.png)
 

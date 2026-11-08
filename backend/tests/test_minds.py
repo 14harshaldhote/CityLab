@@ -7,8 +7,9 @@ import pytest
 
 from citylab.config import Settings
 from citylab.core.clock import MINUTES_PER_DAY
-from citylab.core.mind import TOPICS, independence
+from citylab.core.mind import TOPICS, dominant, independence, resting, thresholds
 from citylab.core.people import EAT_OUT, HOSPITAL, learn
+from citylab.core.voices import complaints, context, main_worry
 from citylab.core.world import World
 from citylab.services.runner import Runner
 
@@ -209,3 +210,69 @@ def test_ask_reads_new_events_as_they_happen():
     ans = r.asker.ask("When did Zarine's Sweet Mart open?")
     assert any(s["id"] == e.id for s in ans["sources"])
     assert "Sweet Mart" in ans["answer"]
+
+
+# ---- everyone's own limits, and what's bothering them ---------------------------------------------
+
+
+def test_everyone_has_their_own_emotional_limits(town):
+    adults = _adults(town)
+    limits = [thresholds(p) for p in adults]
+    assert len({tuple(sorted(x.items())) for x in limits}) > len(adults) * 0.95  # nobody shares a set of limits
+    calm_tempered = [x["anger"] for p, x in zip(adults, limits) if p.agreeableness > 0.65]
+    short_tempered = [x["anger"] for p, x in zip(adults, limits) if p.agreeableness < 0.35]
+    assert statistics.mean(calm_tempered) > statistics.mean(short_tempered)  # agreeable people are slower to anger
+    nervous = [statistics.mean(x.values()) for p, x in zip(adults, limits) if p.neuroticism > 0.65]
+    steady = [statistics.mean(x.values()) for p, x in zip(adults, limits) if p.neuroticism < 0.35]
+    assert statistics.mean(nervous) < statistics.mean(steady)  # nervous people feel things sooner
+
+
+def test_the_same_bad_day_upsets_one_person_and_not_another(town):
+    adults = _adults(town)
+    touchy = min(adults, key=lambda p: thresholds(p)["anger"])
+    easy = max(adults, key=lambda p: thresholds(p)["anger"])
+    rise = (thresholds(touchy)["anger"] + thresholds(easy)["anger"]) / 2  # past one limit, short of the other
+    for p in (touchy, easy):
+        p = copy.copy(p)
+        p.joy, p.sadness, p.fear = resting(p)["joy"], resting(p)["sadness"], resting(p)["fear"]
+        p.anger = resting(p)["anger"] + rise
+        assert dominant(p) == ("anger" if p.id == touchy.id else None)
+
+
+def test_people_only_speak_up_once_it_gets_to_them(town):
+    w = copy.deepcopy(town)
+    p = _adults(w)[5]
+    n = len(w.mind.voices)
+    p.fear = resting(p)["fear"] + thresholds(p)["fear"] * 0.5
+    assert not w.mind._say(p, "fear", "money", "Only ₹200 left in the bank.")
+    assert len(w.mind.voices) == n
+    p.fear = resting(p)["fear"] + thresholds(p)["fear"] * 1.5
+    assert w.mind._say(p, "fear", "money", "Only ₹200 left in the bank.")
+    assert w.mind.voices[-1]["id"] == p.id and w.mind.voices[-1]["about"] == "money running out"
+
+
+def test_worries_are_read_off_their_own_lives(town):
+    w = copy.deepcopy(town)
+    p = next(p for p in _adults(w) if p.job is not None)
+    ctx = context(w)
+    w.fire(p)
+    p.unemployed_since = w.t - 12 * DAY
+    w.economy.balance[w.economy.person(p.id)] = 400.0
+    said = [text for _, _, _, text in complaints(w, p, ctx)]
+    assert "Still no job after 12 days of looking." in said
+    assert "Only ₹400 left in the bank." in said
+    rich = next(q for q in _adults(w) if q.job is not None and w.economy.balance[w.economy.person(q.id)] > 20_000)
+    assert not any(about in ("work", "money") for _, about, _, _ in complaints(w, rich, ctx))
+
+
+def test_every_unhappy_person_is_counted_under_their_own_worry(town):
+    w = copy.deepcopy(town)
+    report = w.mind.worries()
+    unhappy = [p for p in _adults(w) if dominant(p) in ("sadness", "anger", "fear")]
+    assert report["unhappy"] == len(unhappy) > 0
+    assert sum(r["count"] for r in report["reasons"]) <= len(unhappy)
+    ctx = context(w)
+    for r in report["reasons"]:
+        q = w.people[r["example"]["id"]]
+        assert dominant(q) in ("sadness", "anger", "fear")
+        assert r["example"]["text"] == main_worry(w, q, ctx, dominant(q))[1]

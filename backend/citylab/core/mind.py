@@ -39,7 +39,7 @@ Nothing here ever looks at a person's faith: the tests check that.
 
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict, deque
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -47,6 +47,8 @@ import numpy as np
 from .clock import MINUTES_PER_DAY
 from .health import CHECKUP
 from .people import learn
+from .rng import stable_hash
+from .voices import ABOUT, complaints, context, main_worry
 
 if TYPE_CHECKING:
     from .events import Event
@@ -92,17 +94,53 @@ def independence(p: Person) -> float:
     return float(np.clip(0.5 + 0.4 * (p.openness - p.agreeableness) + 0.2 * (p.conscientiousness - 0.5), 0.1, 0.95))
 
 
+FEELING_WORDS = {"joy": "happy and upbeat", "sadness": "low and sad", "anger": "angry and frustrated", "fear": "anxious and worried"}
+UNHAPPY = ("sadness", "anger", "fear")
+TEMPER_WORDS = {"joy": "cheer up", "sadness": "feel low", "anger": "anger", "fear": "worry"}
+
+
+def thresholds(p: Person) -> dict[str, float]:
+    """How far each feeling must rise above their usual before they feel it, and say so.
+
+    Everyone's limits are their own, and fixed for life: nervous people feel everything
+    sooner, agreeable people are slow to anger, outgoing people cheer up easily, and the
+    rest is simply who they are.
+    """
+    base = 0.15 - 0.09 * p.neuroticism
+    lean = {"joy": 0.05 * (1.0 - p.extraversion), "sadness": 0.03 * p.extraversion, "anger": 0.08 * p.agreeableness, "fear": 0.04 * p.openness}
+    return {f: round(float(np.clip(base + lean[f] + ((stable_hash("temper", p.id, f) % 1001) / 1000.0 - 0.5) * 0.1, 0.06, 0.3)), 3)
+            for f in FEELINGS}
+
+
+def dominant(p: Person) -> str | None:
+    """The feeling that has passed its own limit by the most, or None if they are calm."""
+    rest, limit = resting(p), thresholds(p)
+    over = {f: (getattr(p, f) - rest[f]) / limit[f] for f in FEELINGS}
+    top = max(FEELINGS, key=lambda f: (over[f], f))
+    return top if over[top] >= 1.0 else None
+
+
 def feeling_word(p: Person) -> str:
-    vals = {f: getattr(p, f) - resting(p)[f] for f in FEELINGS}
-    top = max(FEELINGS, key=lambda f: (vals[f], f))
-    if vals[top] < 0.12:
-        return "calm, much as usual"
-    return {"joy": "happy and upbeat", "sadness": "low and sad", "anger": "angry and frustrated", "fear": "anxious and worried"}[top]
+    top = dominant(p)
+    return FEELING_WORDS[top] if top else "calm, much as usual"
+
+
+def temper(p: Person) -> str:
+    """Their temperament in words: what they're quick to feel, and what takes a lot."""
+    limit = thresholds(p)
+    quick = min(FEELINGS, key=lambda f: (limit[f], f))
+    slow = max(FEELINGS, key=lambda f: (limit[f], f))
+    return f"quick to {TEMPER_WORDS[quick]}, slow to {TEMPER_WORDS[slow]}"
 
 
 def opinion_word(v: float) -> str:
     return ("very unhappy with" if v < -0.5 else "unhappy with" if v < -0.15 else "fine with" if v < 0.15 else "happy with" if v < 0.5
             else "very happy with")
+
+
+VOICES_KEPT = 60
+VOICES_PER_NIGHT = 8  # people who speak up about how life is going, each night
+RELATION = {"partner": {"M": "husband", "F": "wife"}, "child": {"M": "son", "F": "daughter"}, "parent": {"M": "father", "F": "mother"}}
 
 
 def score10(v: float) -> float:
@@ -114,6 +152,10 @@ class Mind:
         self.w = world
         self.rng = world.streams("mind")
         self.poll: dict[str, Any] = {}
+        self.voices: deque[dict[str, Any]] = deque(maxlen=VOICES_KEPT)  # what people said, newest last
+        self.grief: dict[int, tuple[int, str]] = {}  # person -> (when, who they lost)
+        self._spoke: dict[int, int] = {}  # person -> the day they last spoke up
+        self.memory: dict[int, tuple[int, str, str, str]] = {}  # person -> the last bad thing that happened to them (when, about, feeling, words)
 
     # ---- events move feelings and opinions ---------------------------------------------------
 
@@ -127,6 +169,12 @@ class Mind:
             elif p is not None:
                 sat = float(e.data.get("satisfaction", 0.5))
                 self._nudge(p, {"joy": 0.1 if sat > 0.6 else 0.0, "anger": 0.25 if sat < 0.4 else 0.0}, {"hospital": (sat - 0.5) * 0.9})
+            if p is not None and e.place is not None:
+                wait = int(e.data.get("wait", 0))
+                sat = float(e.data.get("satisfaction", 0.5))
+                if wait >= 60 or sat < 0.4:
+                    place = w.city.buildings[e.place].name.split(",")[0]
+                    self._say(p, "anger", "hospital", f"Waited {wait} minutes at {place}" + (" and the doctor hardly listened." if sat < 0.4 else "."))
             return
         if e.kind == "death":
             dead = w.people.get(e.people[0]) if e.people else None
@@ -135,6 +183,10 @@ class Mind:
             close = [q for q in ([dead.partner] if dead.partner is not None else []) + dead.children + list(dead.parents) if q in w.people]
             for q in close:
                 self._nudge(w.people[q], {"sadness": 0.6, "joy": -0.3}, {})
+                role = "partner" if q == dead.partner else "child" if q in dead.parents else "parent"  # what the dead person was to them
+                who = RELATION[role][dead.sex]
+                self.grief[q] = (w.t, who)
+                self._say(w.people[q], "sadness", "grief", f"I lost my {who}, {dead.name.split()[0]}.")
             for q, strength in w.social.friends(dead.id)[:10]:
                 if q in w.people and q not in close:
                     self._nudge(w.people[q], {"sadness": 0.25 * strength + 0.1}, {})
@@ -157,6 +209,44 @@ class Mind:
                 p = w.people.get(pid)
                 if p is not None and p.alive:
                     self._nudge(p, feel, opine)
+        self._event_voice(e)
+
+    def _event_voice(self, e: Event) -> None:
+        """Bad news that happened to someone today, in their words, if it got to them."""
+        w = self.w
+        place = w.city.buildings[e.place].name.split(",")[0] if e.place is not None else ""
+        if e.kind == "laid_off" and e.people:
+            p = w.people.get(e.people[0])
+            if p is not None:
+                self._say(p, "sadness", "work", f"I lost my job{' at ' + place if place else ''}.")
+        elif e.kind == "crime" and e.people and w.people.get(e.people[-1]) is not None and len(e.people) >= 1:
+            victim = w.people[e.people[-1]]
+            case = next((c for c in reversed(list(w.crime.cases.values())) if c.victim_id == victim.id), None)
+            if case is not None and case.offender != victim.id:
+                text = {"pickpocket": f"Someone picked my pocket at {case.place}.", "burglary": "Thieves broke into our home."}.get(
+                    case.kind, f"I was robbed at {case.place}.")
+                self._say(victim, "fear", "theft", text)
+        elif e.kind == "sick" and e.people and int(e.data.get("severity", 1)) >= 2:
+            p = w.people.get(e.people[0])
+            if p is not None:
+                self._say(p, "sadness", "health", f"Down with {e.data.get('illness', 'something nasty')}.")
+        elif e.kind == "default":
+            for pid in e.people:
+                p = w.people.get(pid)
+                if p is not None:
+                    self._say(p, "fear", "debt", "I couldn't keep up with my loan and the bank wrote it off.")
+
+    def _say(self, p: Person, feeling: str, about: str, text: str) -> bool:
+        """They say it out loud only if the feeling has passed their own limit (it stays on their mind either way)."""
+        self.memory[p.id] = (self.w.t, about, feeling, text)
+        if not p.alive or p.age(self.w.t) < 18 or getattr(p, feeling) - resting(p)[feeling] < thresholds(p)[feeling]:
+            return False
+        w = self.w
+        self.voices.append({"t": w.t, "when": w.now.label(), "id": p.id, "name": p.name,
+                            "district": w.city.buildings[w.households[p.household].home].district,
+                            "feeling": FEELING_WORDS[feeling].split(" and ")[0], "about": ABOUT[about], "text": text})
+        self._spoke[p.id] = w.t // MINUTES_PER_DAY
+        return True
 
     def _policy(self, e: Event) -> None:
         lever, was, value = e.data.get("lever"), float(e.data.get("was", 0)), float(e.data.get("value", 0))
@@ -194,6 +284,7 @@ class Mind:
         self._day(adults)
         self._experience(adults)
         self._talk(adults)
+        self._speak(adults)
         self._reputation()
         self.poll = self._poll(adults)
         return {f"view_{k}": v for k, v in self.poll["overall"].items()}
@@ -229,7 +320,7 @@ class Mind:
                 add("anger", 0.06)
             # and the ups and downs no one can explain, bigger for nervous people
             for j, f in enumerate(FEELINGS):
-                add(f, 0.07 * (0.4 + p.neuroticism) * float(swings[i, j]))
+                add(f, 0.045 * (0.4 + p.neuroticism) * float(swings[i, j]))
             self._nudge(p, feel, {})
 
     def _experience(self, adults: list[Person]) -> None:
@@ -289,6 +380,55 @@ class Mind:
             # their neighbours do becomes a bus sceptic (measured against the town, so the town as a whole doesn't drift)
             for k in TOPICS:
                 lean[k] = float(np.clip(lean[k] + 0.005 * (o[k] - town[k] - lean[k]), -0.8, 0.8))
+
+    def _speak(self, adults: list[Person]) -> None:
+        """A few people say how life is going: whatever is on top of their mind, if it has got to them."""
+        w = self.w
+        day = w.t // MINUTES_PER_DAY
+        self.grief = {q: g for q, g in self.grief.items() if w.t - g[0] <= 14 * MINUTES_PER_DAY}
+        self.memory = {q: m for q, m in self.memory.items() if w.t - m[0] <= 7 * MINUTES_PER_DAY}
+        ctx = context(w)
+        said = 0
+        for i in self.rng.permutation(len(adults)):
+            p = adults[int(i)]
+            feeling = dominant(p)
+            if feeling not in UNHAPPY or day - self._spoke.get(p.id, -99) < 3:
+                continue
+            about, text = main_worry(w, p, ctx, feeling)
+            if about != "low" and self._say(p, feeling, about, text):
+                said += 1
+                if said >= VOICES_PER_NIGHT:
+                    break
+
+    def worries(self) -> dict[str, Any]:
+        """Right now: how many adults are unhappy, what about (each from their own life), and what people have said lately."""
+        w = self.w
+        hour = (w.t // 60, len(self.voices), self.voices[-1]["t"] if self.voices else -1)
+        cached = getattr(self, "_worries", None)
+        if cached is not None and cached[0] == hour:  # looked at once per simulated hour, or when someone speaks up
+            return cached[1]
+        adults = [p for p in w.alive() if p.age(w.t) >= 18]
+        ctx = context(w)
+        counts: Counter[str] = Counter()
+        example: dict[str, dict[str, Any]] = {}
+        unhappy = 0
+        for p in adults:
+            feeling = dominant(p)
+            if feeling not in UNHAPPY:
+                continue
+            unhappy += 1
+            about, text = main_worry(w, p, ctx, feeling)
+            label = ABOUT[about]
+            counts[label] += 1
+            example.setdefault(label, {"id": p.id, "name": p.name, "text": text})
+        out = {
+            "adults": len(adults),
+            "unhappy": unhappy,
+            "reasons": [{"about": k, "count": n, "example": example[k]} for k, n in counts.most_common(8)],
+            "said": list(reversed(self.voices))[:25],
+        }
+        self._worries = (hour, out)
+        return out
 
     def _talk(self, adults: list[Person]) -> None:
         """Friends compare notes; each person decides how much to take on, and passes on a tip or two."""
@@ -385,6 +525,9 @@ class Mind:
             "feeling": feeling_word(p),
             "opinions": {k: round(p.opinions.get(k, 0.0), 2) for k in TOPICS},
             "independence": round(independence(p), 2),
+            "limits": thresholds(p),
+            "temper": temper(p),
+            "worries": [text for _, _, _, text in complaints(self.w, p, context(self.w))[:3]],
             "fame": p.fame,
             "known_for": p.known_for,
         }

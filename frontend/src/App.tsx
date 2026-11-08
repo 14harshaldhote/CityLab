@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, liveFrames } from "./api/client";
-import type { Agencies, Life, Safety, Transport, BuildingCard, CityEvent, CityMap as City, DailyRow, Economy, Frame, PersonCard, Summary, Town } from "./api/types";
+import type { Agencies, Life, Safety, Transport, BuildingCard, CityEvent, CityMap as City, DailyRow, Economy, Frame, PersonCard, Summary, Town, Worries } from "./api/types";
 import AgenciesPanel from "./components/AgenciesPanel";
 import BuildingPanel from "./components/BuildingPanel";
 import City3D from "./components/City3D";
@@ -14,6 +14,7 @@ import HistoryPanel from "./components/HistoryPanel";
 import RoadsPanel from "./components/RoadsPanel";
 import SafetyPanel from "./components/SafetyPanel";
 import TimeBar from "./components/TimeBar";
+import { VoiceTicker, WorriesCard } from "./components/VoicesPanel";
 import TownPanel, { lakh } from "./components/TownPanel";
 import { advise } from "./engine/advisor";
 import { LEGEND_KINDS, ROOF } from "./engine/art";
@@ -53,6 +54,7 @@ export default function App() {
   const [roads, setRoads] = useState<Transport | null>(null);
   const [safety, setSafety] = useState<Safety | null>(null);
   const [life, setLife] = useState<Life | null>(null);
+  const [worries, setWorries] = useState<Worries | null>(null);
   const [town, setTown] = useState<Town | null>(null);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<{ id: number; name: string; age: number; activity: string | null }[]>([]);
@@ -90,6 +92,7 @@ export default function App() {
   usePoll(() => tab === "roads" && api.transport().then(setRoads, () => undefined), 2000, [tab]);
   usePoll(() => tab === "safety" && api.safety().then(setSafety, () => undefined), 2500, [tab]);
   usePoll(() => tab === "city" && api.life().then(setLife, () => undefined), 5000, [tab]);
+  usePoll(() => api.worries().then(setWorries, () => undefined), 4000, []);
   usePoll(() => tab === "city" && api.town().then(setTown, () => undefined), 5000, [tab]);
   usePoll(() => (tab === "charts" || tab === "city") && api.daily().then(setDaily, () => undefined), 5000, [tab]);
   const tips = useMemo(() => advise(summary, econ, daily), [summary, econ, daily]);
@@ -157,7 +160,7 @@ export default function App() {
       townHealth: [
         { label: "ill right now (hundreds)", color: "#d4413f", values: daily.map((d) => (d.town_sick ?? 0) / 100) },
         { label: "doctor visits", color: "#2c7fb8", values: daily.map((d) => d.town_doctor_visits ?? d.town_hospital_visits ?? 0) },
-        { label: "of them at the Civil Hospital", color: "#d4413f", values: daily.map((d) => d.town_hospital_visits ?? 0) },
+        { label: "of them at the Civil Hospital", color: "#e0a03c", values: daily.map((d) => d.town_hospital_visits ?? 0) },
       ],
       crime: [
         { label: "thefts", color: "#b3261e", values: daily.map((d) => d.crimes ?? 0) },
@@ -180,7 +183,7 @@ export default function App() {
       ],
       health: [
         { label: "ill", color: "#d4413f", values: daily.map((d) => d.sick ?? 0) },
-        { label: "Civil Hospital visits", color: "#d4413f", values: daily.map((d) => d.hospital_visits ?? 0) },
+        { label: "Civil Hospital visits", color: "#e0a03c", values: daily.map((d) => d.hospital_visits ?? 0) },
         { label: "clinic visits", color: "#2c7fb8", values: daily.map((d) => d.clinic_visits ?? 0) },
         { label: "hospital wait (minutes)", color: "#8a8f98", values: daily.map((d) => d.hospital_wait ?? 0) },
         { label: "clinic wait (minutes)", color: "#b8a27a", values: daily.map((d) => d.clinic_wait ?? 0) },
@@ -253,6 +256,7 @@ export default function App() {
               Map
             </button>
           </div>
+          <VoiceTicker worries={worries} onPick={pickPerson} />
           {view === "3d" && <p className="how-to">Drag to look around · right-drag to move · scroll to zoom · click anyone or anything</p>}
           {view === "map" && (
           <details className="map-legend" open>
@@ -294,6 +298,7 @@ export default function App() {
               </p>
             </div>
           )}
+          {tab === "city" && <WorriesCard worries={worries} onPick={pickPerson} />}
           {tab === "city" && tips.length > 0 && (
             <div className="card advisor">
               <h2>City advisor</h2>

@@ -445,6 +445,8 @@ class Asker:
             out += figures.informal(w)
         if ("travel" in subj or "buses" in q.kinds and {"cycle", "cycles", "shared", "auto", "autos", "commute"} & words) and not q.people:
             out += figures.travel(w)
+        if ("worries" in subj or "happiness" in subj and why and not q.districts and not groups) and not q.people:
+            out += figures.worries(w)
         if "clinics" in subj and not q.people:
             out += figures.clinics(w)
         if "habits" in subj and not q.people:

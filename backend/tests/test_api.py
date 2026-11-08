@@ -42,3 +42,14 @@ def test_controls_reset_and_websocket():
         assert c.post("/api/reset", json={"seed": 3, "population": 100}).json()["population"] >= 95
         with c.websocket_connect("/api/ws") as ws:
             assert "x" in ws.receive_json()
+
+
+def test_worries_say_what_bothers_people_in_their_own_words():
+    with client() as c:
+        c.post("/api/control", json={"advance_minutes": 3 * 24 * 60})
+        w = c.get("/api/worries").json()
+        assert w["adults"] > 0 and 0 <= w["unhappy"] <= w["adults"]
+        assert sum(r["count"] for r in w["reasons"]) <= w["unhappy"]
+        for v in w["said"]:
+            card = c.get(f"/api/people/{v['id']}").json()
+            assert card["name"] == v["name"] and v["text"]

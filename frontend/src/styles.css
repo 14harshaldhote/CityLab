@@ -415,7 +415,7 @@ aside {
 
 .bar {
   display: grid;
-  grid-template-columns: 78px 1fr 26px;
+  grid-template-columns: 78px 1fr minmax(26px, auto);
   align-items: center;
   gap: 6px;
   font-size: 12px;
@@ -742,7 +742,9 @@ aside {
   background: var(--panel-2);
 }
 
-.bar {
+.projects .bar,
+.depts .bar {
+  display: block;
   height: 9px;
   margin: 5px 0 3px;
   border-radius: 6px 3px 7px 4px;
@@ -750,7 +752,8 @@ aside {
   overflow: hidden;
 }
 
-.bar i {
+.projects .bar i,
+.depts .bar i {
   display: block;
   height: 100%;
   background: repeating-linear-gradient(45deg, #f2b32a 0 8px, #e09a12 8px 16px);
@@ -1192,4 +1195,82 @@ button.cite {
 .ask-shield ul {
   margin: 4px 0 0;
   padding-left: 18px;
+}
+
+.voice-ticker {
+  position: absolute;
+  top: 56px;
+  right: 12px;
+  z-index: 3;
+  max-width: min(460px, calc(100% - 24px));
+  padding: 8px 12px;
+  border: 1.5px solid var(--ink);
+  border-radius: 12px 8px 13px 9px;
+  background: rgba(251, 246, 234, 0.93);
+  color: var(--ink);
+  box-shadow: 2px 2px 0 rgba(59, 47, 39, 0.25);
+  font-size: 12.5px;
+}
+
+.voice-ticker p {
+  margin: 4px 0 0;
+}
+
+.ticker-head {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.worry-bars {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0;
+}
+
+.worry-bars li {
+  display: grid;
+  grid-template-columns: 11em 1fr 3em;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  padding: 2px 0;
+}
+
+.worry-bars div {
+  height: 8px;
+  background: var(--panel-2);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.worry-bars i {
+  display: block;
+  height: 100%;
+  background: var(--warn);
+}
+
+.worry-bars b {
+  text-align: right;
+}
+
+.voices {
+  list-style: none;
+  padding: 0;
+  margin: 6px 0;
+  font-size: 13px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.voices li {
+  padding: 5px 0;
+  border-bottom: 1px dashed var(--line);
+}
+
+.voices time {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
 }

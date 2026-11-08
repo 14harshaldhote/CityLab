@@ -194,9 +194,30 @@ export interface PersonCard {
     feeling: string;
     opinions: Record<string, number>;
     independence: number;
+    limits?: Record<"joy" | "sadness" | "anger" | "fear", number>;
+    temper?: string;
+    worries?: string[];
     fame: number;
     known_for: string;
   };
+}
+
+export interface Voice {
+  t: number;
+  when: string;
+  id: number;
+  name: string;
+  district: string;
+  feeling: string;
+  about: string;
+  text: string;
+}
+
+export interface Worries {
+  adults: number;
+  unhappy: number;
+  reasons: { about: string; count: number; example: { id: number; name: string; text: string } }[];
+  said: Voice[];
 }
 
 export interface Life {

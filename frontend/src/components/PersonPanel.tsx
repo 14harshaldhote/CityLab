@@ -116,6 +116,22 @@ function InnerLife({ card }: { card: PersonCard }) {
           ))}
         </div>
       </div>
+      {mind.temper && (
+        <p className="small">
+          Temperament: <b>{mind.temper}</b>. How far above their usual a feeling has to rise before it gets to them:{" "}
+          {(["sadness", "anger", "fear", "joy"] as const).map((f) => `${f} ${Math.round(100 * (mind.limits?.[f] ?? 0))}`).join(" · ")} (out of 100; everyone's are different).
+        </p>
+      )}
+      {mind.worries && mind.worries.length > 0 && (
+        <>
+          <h3>On their mind</h3>
+          <ul className="voices">
+            {mind.worries.map((w) => (
+              <li key={w}>“{w}”</li>
+            ))}
+          </ul>
+        </>
+      )}
       <p className="muted small">Feelings follow what happens to them and fade back to their nature. Opinions come from their own life, then from friends; the more independent they are, the less friends sway them.</p>
       <Habits card={card} />
     </>

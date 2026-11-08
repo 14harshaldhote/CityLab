@@ -98,6 +98,9 @@ SUBJECTS: dict[str, tuple[str, ...]] = {
     "habits": ("favourite", "favourites", "favorite", "favorites", "habit", "habits", "regular", "regulars", "usual", "prefer",
                "prefers", "preference", "preferences", "learn", "learns", "learned", "learnt", "learning", "experience", "word of mouth",
                "recommend", "recommends", "recommendation", "tips", "self growing", "self-growing", "grow", "grows"),
+    "worries": ("bothering", "bothers", "bother", "complaining", "complain about", "complaints", "grievance", "grievances", "upset",
+                "unhappy about", "fed up", "frustrated", "worry", "worries", "worried about", "grumble", "grumbling", "saying",
+                "making people unhappy", "makes people unhappy"),
     "clinics": ("clinic", "clinics", "private doctor", "private doctors", "private clinic", "private clinics", "go private", "private"),
 }
 

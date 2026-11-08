@@ -809,6 +809,22 @@ def clinics(w: Any) -> list[str]:
     return s
 
 
+def worries(w: Any) -> list[str]:
+    """What's bothering people right now, each counted from their own life, and a few of their own words."""
+    rep = w.mind.worries()
+    if not rep.get("adults"):
+        return []
+    share = round(100 * rep["unhappy"] / rep["adults"])
+    out = [f"Right now {rep['unhappy']:,} of {rep['adults']:,} adults on the map are unhappy ({share}%)."]
+    if rep["reasons"]:
+        out.append("What weighs on them most, person by person: "
+                   + ", ".join(f"{r['about']} ({r['count']})" for r in rep["reasons"][:6]) + ".")
+    said = rep["said"][:3]
+    if said:
+        out.append("In their own words: " + "; ".join(f"{v['name']}: \u201c{v['text']}\u201d" for v in said))
+    return out
+
+
 def habits(w: Any) -> list[str]:
     """What the town has learned: favourite places, places avoided, tips passed on."""
     alive = [p for p in w.alive() if p.age(w.t) >= 18]

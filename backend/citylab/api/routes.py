@@ -111,6 +111,14 @@ def life(request: Request) -> dict[str, Any]:
                 "informal": w.informal.view() | {"share": round(informal_share(w), 3)}}
 
 
+@router.get("/worries")
+def worries(request: Request) -> dict[str, Any]:
+    """What's making people unhappy right now, each counted from their own life, and what people have said lately."""
+    r = runner(request)
+    with r.lock:
+        return r.world.mind.worries()
+
+
 @router.get("/town")
 def town(request: Request) -> dict[str, Any]:
     """The whole town of 2 lakh: the books and the map together, next to a real Indian town of the same size."""
