@@ -3,7 +3,8 @@
 Imagine a toy town that lives by itself. Nobody moves the pieces. Kamalnagar is
 home to 2 lakh people, the size of a real Indian municipal town. About 5,000 of
 them live on the map, where you can follow every one: they wake up, catch the
-morning rush on their scooters, go to work and school, grab chai with friends,
+morning rush on their scooters and cycles, go to work and school, push a
+vegetable cart to their spot, grab chai with friends,
 pray, shop, fall in love, have babies and grow old. Everyone else is counted in
 the town's books, the way a census counts people. Your job is simple: watch,
 poke around, and see what happens.
@@ -80,10 +81,12 @@ completely free and runs on your own computer.
     hospital, the buses and the council. Click anyone to see their joys, worries
     and opinions. When someone is laid off, watch them get sad and angry, and grumble
     about the job market to their friends.
-17. **Visit the hospital.** People catch colds, fevers and stomach bugs (more in
-    the monsoon), and older people go for check-ups. Each doctor has their own
-    style: some are kind, some are quick, and all of them get tired by the end of
-    a long day. In Records, pick *Doctor visits* to read every appointment.
+17. **Visit the doctor.** People catch colds, fevers and stomach bugs (more in
+    the monsoon), and older people go for check-ups. Families who can afford it
+    see a neighbourhood doctor at a private clinic; others queue at the Civil
+    Hospital, where it's cheap or free. Each doctor has their own style: some are
+    kind, some are quick, and all of them get tired by the end of a long day. In
+    Records, pick *Doctor visits* to read every appointment.
 18. **Catch the tax dodgers.** A few shops pay their staff cash in hand and keep
     half their takings off the books. The Tax Office audits a few businesses every
     week and fines the ones it catches. Ask the city who pays and who doesn't,
@@ -95,9 +98,20 @@ completely free and runs on your own computer.
 20. **Check it against real India.** The *City* tab puts Kamalnagar next to a
     real Indian town of the same size: how many children and old people, women
     for every 1,000 men, births and deaths, unemployment, pay, police, doctors,
-    thefts, scooters and how happy people say they are. Green means close to
-    the real figure. Ask "How does Kamalnagar compare with a real town?" or
+    thefts, scooters and cycles, private clinics, street vendors and how happy
+    people say they are. Green means close to the real figure, or as close as
+    chance allows for rare things like deaths and thefts. Ask "How does Kamalnagar compare with a real town?" or
     "What is the population?" to hear it in words.
+21. **Watch habits grow.** Nobody in Kamalnagar is born knowing the town. Click
+    anyone and look under *Learned from experience*: the mess they keep going
+    back to, the park they avoid, whether they'd rather cycle or wait for the
+    bus. Ask "Which places do people love most?" or "What is Priya's favourite
+    place?".
+22. **Meet the people with no payslip.** Street vendors with their carts,
+    domestic workers who clean four or five homes every morning, and day
+    labourers waiting at the labour naka at seven, hoping a builder picks them.
+    Ask "How much does a street vendor earn?" or "How many labourers got work
+    today?".
 
 ![Kamalnagar at night](docs/images/city-night.png)
 
@@ -139,11 +153,19 @@ These are the same ideas that power modern games and AI, in plain words.
   take so many vehicles; when it is nearly full, everyone on it slows down
   sharply. That's why a few extra cars at 9 o'clock turn a five-minute drive into
   a crawl. Traffic engineers use the same rule to plan real roads.
-* **Everyone picks how to travel.** Short hops are walked and car owners drive.
-  Everyone else weighs walking, the bus and an auto by time and money. Waiting
-  feels longer than riding, walking in the rain feels much longer, and a fare
-  matters more to someone who earns less. That's how real cities end up with
-  their mix of buses, autos and footpaths.
+* **Everyone picks how to travel.** Short hops are walked and car and scooter
+  owners ride. Everyone else weighs walking, cycling, the bus, a shared auto and a
+  whole auto by time and money. Waiting feels longer than riding, walking or
+  cycling in the rain feels much longer, and a fare matters more to someone who
+  earns less. That's how real cities end up with their mix of buses, autos and
+  footpaths.
+* **People learn from experience.** Every place people try leaves a memory: a
+  great thali, a packed shop, a clinic where the doctor was kind, a bus so full
+  they had to stand. Next time, that memory tilts their choice, so everyone grows
+  their own habits and favourites, and curious people keep trying new places.
+  Friends swap tips too, so a good doctor's name travels by word of mouth. This
+  is the simplest kind of *learning from rewards*, the idea behind game AIs that
+  teach themselves.
 * **People have feelings, opinions and a reputation.** Each person feels joy,
   sadness, anger and fear. A new job, a wedding or a festival of their own faith
   lifts them; a lay-off, a theft, an illness or money worries bring them down,
@@ -152,7 +174,11 @@ These are the same ideas that power modern games and AI, in plain words.
   dark. Everyone also has their own slant on the taxes, the police, the hospital,
   the buses, finding work and the council, shaped by what happens to them and
   then by talking with friends. Independent-minded people stick to their views;
-  easy-going ones are swayed more. The most popular, the richest, the department
+  easy-going ones are swayed more. And like all of us, they listen most to
+  friends who already half agree, and shrug off views far from their own, so the
+  town keeps its fans and its sceptics instead of everyone ending up thinking
+  the same thing. What keeps happening to someone slowly becomes part of who
+  they are. The most popular, the richest, the department
   heads and the best-loved doctors become the city's best-known people. This is
   how researchers model how opinions spread through a crowd.
 * **A happiness index.** Every night the city asks each adult how life is going:
@@ -224,16 +250,22 @@ These are the same ideas that power modern games and AI, in plain words.
 * **People and families** from every community: Hindu, Muslim, Buddhist, Jain,
   Christian, Sikh and Parsi, with names from their community.
 * **Places to go:** bungalows and housing societies with water tanks on the roof,
-  glass office towers, shops, restaurants, factories, schools, a hospital, the
+  glass office towers, shops, restaurants, factories, schools, a hospital and
+  neighbourhood clinics, the
   police station, the District Court, the municipal corporation and City Bank.
 * **Places of worship:** mandirs, masjids, a church, a gurudwara with its free
   langar, a Buddha vihar, a Jain derasar and a Parsi agiary.
 * **Money:** wages, rent, groceries, water bills, taxes, pensions, savings,
   loans, companies that grow or lay people off, and a few that dodge their taxes.
+* **Work with no payslip:** street vendors selling sabzi from their carts,
+  domestic workers, and day labourers at the labour naka, about as many as a real
+  Indian town has. No tax, no pension, and some days no work at all.
 * **Getting around:** five city bus routes, including a ring road around the
-  centre, with almost 50 stops, plus autos, scooters, motorbikes and a few cars. Streets are named the
+  centre, with almost 50 stops, plus shared autos along the main roads, autos,
+  scooters, motorbikes, bicycles and a few cars. Streets are named the
   Indian way, like M.G. Road, Tilak Road and Gandhi Marg.
-* **People who run the city:** the police and the District Court, the Civil Hospital and its doctors, the Municipal Tax
+* **People who run the city:** the police and the District Court, the Civil Hospital and its doctors (and the private
+  clinics next door), the Municipal Tax
   Office, a town planning office, a public works department
   that lays and widens roads, the municipal bus service, an education department,
   the water supply, and local builders who borrow from City Bank to put up new

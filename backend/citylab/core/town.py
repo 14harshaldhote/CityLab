@@ -137,6 +137,8 @@ class Town:
         """Events per person (or per ``per``) per day: the map's last month, pulled towards the real figure."""
         seen = sum(float(r.get(key) or 0) for r in rows)
         exposure = sum(float(r.get(per) or 0) for r in rows)
+        if exposure <= 0:  # nothing on the map to go by (no thefts at all this month, say): the real figure stands
+            return prior
         weight = prior_days * exposure / len(rows) if rows else 1.0
         return (seen + prior * weight) / max(1.0, exposure + weight)
 
@@ -152,6 +154,7 @@ class Town:
         rng = self.rng
         rows = (list(w.daily[-(WINDOW - 1):]) + [map_row]) if map_row else list(w.daily[-WINDOW:])
         today = {"born": 0, "died": 0, "arrived": 0}
+        expected_deaths = 0.0
 
         # life and death, by real rates
         for d, a in self.people.items():
@@ -161,6 +164,7 @@ class Town:
                     if n <= 0:
                         continue
                     died = int(rng.binomial(n, rw.DEATH_RATE_BY_AGE[i] / DAYS))
+                    expected_deaths += n * rw.DEATH_RATE_BY_AGE[i] / DAYS
                     a[i, s] -= died
                     today["died"] += died
                     lo, hi = BANDS[i]
@@ -200,7 +204,8 @@ class Town:
         unemployment = self._share(rows, "unemployed", "labour_force", rw.UNEMPLOYMENT) if rows else rw.UNEMPLOYMENT
         status = self._status(unemployment)
         fall_ill = self._rate(rows, "fell_ill", "population", rw.FALL_ILL_PER_DAY)
-        visits = self._rate(rows, "hospital_visits", "population", rw.DOCTOR_VISITS_PER_DAY)
+        visits = self._rate(rows, "doctor_visits", "population", rw.DOCTOR_VISITS_PER_DAY)
+        private = self._share(rows, "clinic_visits", "doctor_visits", rw.PRIVATE_VISITS)
         ill = self._share(rows, "sick", "population", rw.ILL_AT_ANY_TIME)
         # thefts are rare on the map (a handful a month), so the real figure counts as much as a year of it
         thefts = self._rate(rows, "crimes", "population", rw.THEFTS_PER_LAKH / rw.REPORTED / 1e5 / DAYS, RARE_PRIOR_DAYS)
@@ -208,11 +213,16 @@ class Town:
         cleared = self._share(rows, "arrests", "crimes_reported", rw.CLEARED, RARE_PRIOR_DAYS)
         today.update({
             "fell_ill": int(rng.poisson(pop * fall_ill)),
-            "hospital_visits": int(rng.poisson(pop * visits)),
+            "doctor_visits": int(rng.poisson(pop * visits)),
             "sick": int(round(pop * ill)),
             "crimes": int(rng.poisson(pop * thefts)),
         })
+        today["clinic_visits"] = int(rng.binomial(today["doctor_visits"], min(1.0, private)))
+        today["hospital_visits"] = today["doctor_visits"] - today["clinic_visits"]
         today["crimes_reported"] = int(rng.binomial(today["crimes"], min(1.0, reported)))
+        # what chance alone would give on average, for comparing a noisy month with a yearly figure
+        today["expected_crimes_reported"] = pop * thefts * min(1.0, reported)
+        today["expected_deaths"] = expected_deaths
         today["arrests"] = int(rng.binomial(today["crimes_reported"], min(1.0, cleared)))
         today.update({k: int(round(v)) for k, v in status.items()})
         today["population"] = pop
@@ -305,9 +315,12 @@ class Town:
         total = max(1, int(a.sum()))
         out: list[dict[str, Any]] = []
 
-        def add(label: str, ours: float | None, real: float, unit: str, source: str, digits: int = 0) -> None:
-            out.append({"label": label, "kamalnagar": None if ours is None else round(float(ours), digits), "real": round(float(real), digits),
-                        "unit": unit, "source": source})
+        def add(label: str, ours: float | None, real: float, unit: str, source: str, digits: int = 0, margin: float | None = None) -> None:
+            row = {"label": label, "kamalnagar": None if ours is None else round(float(ours), digits), "real": round(float(real), digits),
+                   "unit": unit, "source": source}
+            if margin is not None:  # how far chance alone could take a figure this rare from the real one (2 standard deviations)
+                row["margin"] = round(float(margin), 3)
+            out.append(row)
 
         add("People", total, rw.TOWN_POPULATION, "", "a town of 2 lakh")
         add("Women per 1,000 men", 1000 * a[:, 1].sum() / max(1, a[:, 0].sum()), 1000 * (1 - rw.MALE_SHARE) / rw.MALE_SHARE, "", "Census 2011, towns")
@@ -316,32 +329,49 @@ class Town:
         homes = sum(1 for h in w.households.values() if h.members)
         add("People per household", len(alive) / max(1, homes), rw.HOUSEHOLD_SIZE, "", "NFHS-5, towns", 1)
         if rows and rows[-1].get("town_population"):
-            n, pop = len(rows), float(rows[-1]["town_population"])
+            # births, deaths and thefts are rare enough that a month swings by chance: count them over up to
+            # a year, as SRS and NCRB do, and say how far chance alone could move the figure
+            long = list(w.daily[-int(DAYS):])
+            n, pop = len(long), float(rows[-1]["town_population"])
             year = DAYS / n
 
-            def town(key: str) -> float:
-                return sum(float(r.get(key) or 0) for r in rows)
+            def town(key: str, sel: list[dict[str, Any]] = long) -> float:
+                return sum(float(r.get(key) or 0) for r in sel)
 
-            add("Births per 1,000 a year", 1000 * town("town_births") * year / pop, rw.BIRTHS_PER_1000, "", "SRS, towns", 1)
-            add("Deaths per 1,000 a year", 1000 * town("town_deaths") * year / pop, rw.DEATHS_PER_1000, "", "SRS, towns", 1)
+            def chance(count: float) -> float:
+                return 2.0 / max(1.0, count) ** 0.5
+
+            days = f", last {n} days" if n < DAYS else ""
+            add("Births per 1,000 a year", 1000 * town("town_births") * year / pop, rw.BIRTHS_PER_1000, "", "SRS, towns" + days, 1,
+                chance(town("town_births")))
+            add("Deaths per 1,000 a year", 1000 * town("town_deaths") * year / pop, rw.DEATHS_PER_1000, "", "SRS, towns" + days, 1,
+                chance(town("town_deaths")))
             r = rows[-1]
             add("Unemployment", 100 * r["town_unemployed"] / max(1, r["town_unemployed"] + r["town_employed"]), 100 * rw.UNEMPLOYMENT, "%",
                 "PLFS 2023-24, towns", 1)
-            add("Thefts registered per lakh a year", 1e5 * town("town_crimes_reported") * year / pop, rw.THEFTS_PER_LAKH, "", "NCRB 2022")
+            add("Thefts registered per lakh a year", 1e5 * town("town_crimes_reported") * year / pop, rw.THEFTS_PER_LAKH, "", "NCRB 2022" + days,
+                0, chance(town("town_crimes_reported")))
             add("Ill right now", 100 * r["town_sick"] / pop, 100 * rw.ILL_AT_ANY_TIME, "%", "NSS 75th round", 1)
+            seen = town("town_doctor_visits", rows)
+            if seen:
+                add("Doctor visits to private clinics", 100 * town("town_clinic_visits", rows) / seen, 100 * rw.PRIVATE_VISITS, "%",
+                    "NSS 75th round, towns")
         adults = [p for p in alive if p.age(t) >= 18]
-        working = [p for p in adults if p.job is not None or p.unemployed_since is not None]
+        working = [p for p in adults if p.job is not None or p.trade or p.unemployed_since is not None]
         add("Adults working or looking for work", 100 * len(working) / max(1, len(adults)), 100 * self._force_share(), "%", "PLFS 2023-24, towns")
         salaried = [p.job.wage for p in alive if p.job is not None and w.city.buildings[p.job.building].kind in SALARIED]
         if salaried:
             add("A salaried job's monthly pay", 26 * sum(salaried) / len(salaried), rw.MONTHLY_EARNINGS["regular"], "₹", "PLFS 2023-24, towns")
         add("Police per lakh people", self.services(total)["police"] * 1e5 / total, rw.POLICE_PER_LAKH, "", "BPR&D 2023")
-        hosp = [b.id for b in w.city.buildings if b.kind == "hospital"]
+        hosp = [b.id for b in w.city.buildings if b.kind in ("hospital", "clinic")]
         doctors = sum(1 for p in alive if p.job is not None and p.job.building in hosp and p.skill >= DOCTOR_SKILL)
         add("Doctors per 1,000 (on the map)", 1000 * doctors / max(1, len(alive)), rw.DOCTORS_PER_1000, "", "NMC", 1)
         hhs = [h for h in w.households.values() if h.members]
         add("Homes with a scooter or motorbike", 100 * sum(h.has_scooter for h in hhs) / max(1, len(hhs)), 100 * rw.SCOOTER_OWNERS, "%", "NFHS-5, towns")
         add("Homes with a car", 100 * sum(h.has_car for h in hhs) / max(1, len(hhs)), 100 * rw.CAR_OWNERS, "%", "NFHS-5, towns")
+        add("Homes with a bicycle", 100 * sum(h.has_cycle for h in hhs) / max(1, len(hhs)), 100 * rw.CYCLE_OWNERS, "%", "NFHS-5, towns")
+        add("Street vendors per 100 people (map)", 100 * sum(1 for p in alive if p.trade == "vendor") / max(1, len(alive)), rw.VENDORS_PER_100, "",
+            "National Policy on Urban Street Vendors", 1)
         happy = rows[-1].get("happiness") if rows else None
         add("Happiness (life ladder, out of 100)", happy, rw.HAPPINESS, "", "World Happiness Report 2024")
         return out
@@ -375,6 +405,8 @@ class Town:
             "town_fell_ill": both("fell_ill"),
             "town_sick": both("sick"),
             "town_hospital_visits": both("hospital_visits"),
+            "town_clinic_visits": both("clinic_visits"),
+            "town_doctor_visits": both("doctor_visits"),
             "town_crimes": both("crimes"),
             "town_crimes_reported": both("crimes_reported"),
             "town_arrests": both("arrests"),

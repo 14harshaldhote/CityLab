@@ -179,6 +179,16 @@ export interface PersonCard {
   illness?: { what: string; how: string; seen_doctor: boolean } | null;
   happiness?: number;
   cash_job?: boolean;
+  at_home?: boolean;
+  trade?: string | null;
+  trade_place?: string | null;
+  clients?: number;
+  habits?: {
+    favourites: { id: number; name: string; kind: string; like: number }[];
+    avoids: { id: number; name: string; kind: string; like: number }[];
+    ways: Record<string, number>;
+    tried: number;
+  };
   mind?: {
     feelings: Record<"joy" | "sadness" | "anger" | "fear", number>;
     feeling: string;
@@ -193,8 +203,25 @@ export interface Life {
   happiness: { index?: number; parts?: Record<string, number>; districts?: Record<string, number>; groups?: Record<string, number | null> };
   poll: { overall?: Record<string, number>; moods?: Record<string, number>; adults?: number; feelings?: Record<string, number> };
   celebrities: { id: number; name: string; known_for: string; fame: number }[];
-  hospital: { sick: number; by_illness: Record<string, number>; month: { visits: number; wait: number | null; satisfaction: number | null; right: number | null; free: number } };
+  hospital: {
+    sick: number;
+    by_illness: Record<string, number>;
+    month: { visits: number; wait: number | null; satisfaction: number | null; right: number | null; free: number; private?: number };
+    places?: { id: number; name: string; kind: string; district: string; visits: number; wait: number | null; satisfaction: number | null; fan_club: number }[];
+  };
   tax: { taxpayers: number; cash_workers: number; cash_books: number };
+  informal?: {
+    vendors: number;
+    maids: number;
+    labourers: number;
+    cash_in_hand: number;
+    workers: number;
+    homes_with_maid: number;
+    a_day: { vendor: number | null; maid: number | null; labourer: number | null };
+    naka: { waiting: number; picked: number };
+    naka_place: string;
+    share: number;
+  };
 }
 
 export interface BuildingCard extends Building {
@@ -269,6 +296,21 @@ export interface DailyRow {
   trips_bus?: number;
   trips_auto?: number;
   trips_scooter?: number;
+  trips_cycle?: number;
+  trips_shared?: number;
+  clinic_visits?: number;
+  clinic_wait?: number | null;
+  doctor_visits?: number;
+  town_clinic_visits?: number;
+  town_doctor_visits?: number;
+  vendors?: number;
+  maids?: number;
+  labourers?: number;
+  at_naka?: number;
+  naka_hired?: number;
+  vendor_takings?: number;
+  maid_pay?: number;
+  labour_pay?: number;
   town_population?: number;
   town_births?: number;
   town_deaths?: number;
@@ -310,7 +352,17 @@ export interface DailyRow {
 }
 
 export interface Transport {
-  now: { walking: number; driving: number; on_buses: number; in_autos: number; on_scooters?: number; waiting: number; buses: number };
+  now: {
+    walking: number;
+    driving: number;
+    on_buses: number;
+    in_autos: number;
+    on_scooters?: number;
+    cycling?: number;
+    in_shared_autos?: number;
+    waiting: number;
+    buses: number;
+  };
   jams: { street: string; ratio: number; speed_kmh: number }[];
   lines: { number: string; name: string; color: string; stops: number; km: number; buses_now: number; riders_now: number; riders_today: number; every: number | null }[];
   today: { trips: Record<string, number>; commute_min: number; late: number; fares: number; bus_km: number };

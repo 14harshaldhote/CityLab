@@ -57,19 +57,21 @@ TYPES: dict[str, BuildingType] = {
     t.kind: t
     for t in (
         BuildingType("home", "Homes", 0, (), 0.0),
-        BuildingType("office", "Office", 22, OFFICE_HOURS, 750.0, 8 * H, 19 * H, True),
-        BuildingType("shop", "Shop", 8, (Shift(9 * H + 30, 20 * H, False),), 420.0, 10 * H, 20 * H),
-        BuildingType("restaurant", "Restaurant", 8, (Shift(11 * H, 23 * H, False),), 380.0, 11 * H, 23 * H),
-        BuildingType("factory", "Factory", 27, (Shift(6 * H, 14 * H, False), Shift(14 * H, 22 * H, False)), 550.0),
+        BuildingType("office", "Office", 19, OFFICE_HOURS, 750.0, 8 * H, 19 * H, True),
+        BuildingType("shop", "Shop", 7, (Shift(9 * H + 30, 20 * H, False),), 420.0, 10 * H, 20 * H),
+        BuildingType("restaurant", "Restaurant", 7, (Shift(11 * H, 23 * H, False),), 380.0, 11 * H, 23 * H),
+        BuildingType("factory", "Factory", 23, (Shift(6 * H, 14 * H, False), Shift(14 * H, 22 * H, False)), 550.0),
         BuildingType("school", "School", 12, (Shift(7 * H + 30, 15 * H + 30, True),), 700.0, 8 * H, 15 * H, True),
         BuildingType(
-            "hospital", "Hospital", 27, (Shift(7 * H, 15 * H, False), Shift(15 * H, 23 * H, False), Shift(23 * H, 7 * H, False)), 750.0
+            "hospital", "Hospital", 20, (Shift(7 * H, 15 * H, False), Shift(15 * H, 23 * H, False), Shift(23 * H, 7 * H, False)), 750.0
         ),
         BuildingType(
             "police", "Police station", 12, (Shift(6 * H, 14 * H, False), Shift(14 * H, 22 * H, False), Shift(22 * H, 6 * H, False)), 800.0
         ),
         BuildingType("city_hall", "City Hall", 20, OFFICE_HOURS, 700.0, 9 * H, 17 * H, True),
         BuildingType("bank", "Bank", 10, OFFICE_HOURS, 850.0, 9 * H, 17 * H, True),
+        # a neighbourhood doctor's clinic: the doctor, a compounder and a receptionist, mornings and evenings
+        BuildingType("clinic", "Clinic", 3, (Shift(9 * H, 14 * H, False), Shift(14 * H, 21 * H, False)), 700.0, 9 * H, 21 * H),
         BuildingType("park", "Park", 2, (Shift(7 * H, 15 * H, False),), 450.0, 6 * H, 22 * H),
         BuildingType("court", "District Court", 12, OFFICE_HOURS, 900.0, 10 * H, 17 * H, True),
         BuildingType("bus_depot", "Bus depot", 20, (Shift(5 * H, 13 * H, False), Shift(13 * H, 21 * H, False)), 600.0),
@@ -337,6 +339,10 @@ def _zone_blocks(rng: np.random.Generator, developed: np.ndarray, c: float) -> d
     res = [k for k, v in zones.items() if v == "residential"]
     for k in [res[i] for i in rng.permutation(len(res))[: max(2, len(res) // 10)]]:
         zones[k] = "school"
+    # private clinics: a neighbourhood doctor for every few thousand people, spread out
+    res = [k for k, v in zones.items() if v == "residential"]
+    for k in [res[i] for i in rng.permutation(len(res))[: max(2, len(res) // 12)]]:
+        zones[k] = "clinic"
     # places of worship on residential streets: temples spread across the city, a few
     # masjids, and one place for each smaller community
     res = [k for k, v in zones.items() if v == "residential"]
@@ -378,6 +384,9 @@ def _block_layout(rng: np.random.Generator, zone: str, r: float) -> Layout:
         return [(zone[8:], QUADS[0], 0)] + [("home", q, per) for q in QUADS[1:]]
     if zone == "local":
         return [("shop", QUADS[0], 0), ("restaurant", QUADS[1], 0), ("home", QUADS[2], 5), ("home", QUADS[3], 5)]
+    if zone == "clinic":  # a neighbourhood doctor on the ground floor, families above and around
+        return [("clinic", QUADS[0], 0), ("home", QUADS[1], 10 if r < 3.5 else 4), ("home", QUADS[2], 10 if r < 3.5 else 4),
+                ("home", QUADS[3], 10 if r < 3.5 else 4)]
     # residential: apartments nearer the centre, houses further out
     per = 10 if r < 3.5 else 4
     return [("home", q, per) for q in QUADS]
@@ -401,6 +410,8 @@ FACTORY_BRANDS = ("Sahyadri", "Deccan", "Indrayani", "Godavari", "Krishna", "Bhi
 OFFICES = ("IT Park", "Business Centre", "Corporate Tower", "Trade Centre", "Tech Hub")
 SCHOOLS = ("Saraswati Vidya Mandir", "New English School", "Modern High School", "Sant Dnyaneshwar Vidyalaya",
            "St. Joseph's School", "Anjuman Urdu High School", "Bal Shikshan Mandir", "Zilla Parishad School")
+CLINICS = ("Sanjeevani Clinic", "Aarogya Clinic", "Dhanvantari Clinic", "Shifa Clinic", "Jeevan Jyot Clinic", "Mauli Clinic",
+           "Family Care Clinic", "Swasthya Clinic", "Ashirwad Clinic", "Seva Clinic")
 PARKS = ("Phule Udyan", "Tilak Baug", "Nana-Nani Park", "Ganesh Udyan", "Azad Maidan", "Hirvai Garden")
 HOMES = ("Sai Krupa", "Shanti", "Gokul", "Anand", "Sukh Sagar", "Ganga", "Om", "Green Valley", "Noor", "Mount Carmel", "Sunshine",
          "Laxmi", "Vrindavan", "Kalpataru", "Swapnapurti", "Shubham", "Jamuna", "Panchavati", "Neelkanth", "Gulmohar")
@@ -440,5 +451,5 @@ def _name(kind: str, district: str, k: int, households: int = 0, zone: str = "")
         return f"{FACTORY_BRANDS[(k - 1) % len(FACTORY_BRANDS)]} {FACTORIES[(3 * k + (k - 1) // len(FACTORY_BRANDS)) % len(FACTORIES)]}"
     if kind == "office":
         return f"{district} {pick(OFFICES)}"
-    names = {"shop": SHOPS, "restaurant": RESTAURANTS, "school": SCHOOLS, "park": PARKS}[kind]
+    names = {"shop": SHOPS, "restaurant": RESTAURANTS, "school": SCHOOLS, "park": PARKS, "clinic": CLINICS}[kind]
     return f"{pick(names)}, {district}"

@@ -27,6 +27,8 @@ const ON_BUS = 3;
 const IN_AUTO = 4;
 const WAITING = 5;
 const ON_SCOOTER = 6;
+const ON_CYCLE = 7;
+const IN_SHARED = 8; // a shared six-seater auto
 const SCOOTER_COLORS = [0x2d2d2d, 0xd2463c, 0x3f63a5, 0xf2f2f2, 0x149c8f, 0x8a4fc6];
 const JAM = [
   [0.9, 0xf2b32a],
@@ -237,7 +239,10 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
     const busRoof = new THREE.InstancedMesh(new THREE.BoxGeometry(11.6, 0.35, 2.8).translate(0, 3.45, 0), solid, BUSES);
     // scooters and motorbikes, the town's favourite way to get about: a low body under its rider
     const scooter = new THREE.InstancedMesh(new THREE.BoxGeometry(2.0, 0.8, 0.7).translate(0, 0.55, 0), solid, 2000);
-    for (const m of [autoBody, autoTop, busBody, busWin, busRoof, scooter]) {
+    // bicycles: a thin dark frame with two wheels
+    const cycle = new THREE.InstancedMesh(new THREE.BoxGeometry(1.9, 0.18, 0.12).translate(0, 0.75, 0), solid, 2000);
+    const wheels = new THREE.InstancedMesh(new THREE.TorusGeometry(0.42, 0.08, 6, 12).translate(0, 0.45, 0), solid, 4000);
+    for (const m of [autoBody, autoTop, busBody, busWin, busRoof, scooter, cycle, wheels]) {
       m.castShadow = true;
       m.frustumCulled = false;
       m.count = 0;
@@ -247,7 +252,9 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
     for (let i = 0; i < 2000; i++) {
       autoBody.setColorAt(i, col.setHex(0x2f8f4a));
       autoTop.setColorAt(i, col.setHex(0xf2c12e));
+      cycle.setColorAt(i, col.setHex(0x2b2b2b));
     }
+    for (let i = 0; i < 4000; i++) wheels.setColorAt(i, col.setHex(0x1d1d1d));
     for (let i = 0; i < BUSES; i++) {
       busWin.setColorAt(i, col.setHex(0x2b3a4a));
       busRoof.setColorAt(i, col.setHex(0xf4f1e8));
@@ -453,6 +460,7 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
       let nc = 0;
       let na = 0;
       let ns = 0;
+      let ny = 0;
       shown = [];
       for (let i = 0; i < n; i++) {
         const pl = next.place?.[i] ?? -1;
@@ -470,11 +478,13 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
         }
         const driving = move === DRIVING;
         const riding = move === ON_SCOOTER;
-        const side = pl < 0 ? (driving || riding || move === IN_AUTO ? 5 : 13) : 0;
+        const cycling = move === ON_CYCLE;
+        const inAuto = move === IN_AUTO || move === IN_SHARED;
+        const side = pl < 0 ? (driving || riding || inAuto ? 5 : cycling ? 9 : 13) : 0;
         const x = pos.x[i] + hz * side;
         const z = pos.y[i] - hx * side;
         prevPos.set(id, [x, z]);
-        if (move === IN_AUTO) {
+        if (inAuto) {
           const cs = Math.max(1.2, S * 0.55);
           place(autoBody, na, x, 0.3, z, cs, cs, cs, -h);
           place(autoTop, na, x, 0.3, z, cs, cs, cs, -h);
@@ -495,6 +505,14 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
             scooter.setColorAt(ns, col.setHex(SCOOTER_COLORS[id % SCOOTER_COLORS.length]));
             ns++;
             bob = 0.9 * cs; // sitting on it, not walking
+          } else if (cycling) {
+            const cs = Math.max(1.2, S * 0.55);
+            place(cycle, ny, x, 0, z, cs, cs, cs, -h);
+            const w0 = 0.8 * cs;
+            place(wheels, 2 * ny, x + hx * w0, 0, z + hz * w0, cs, cs, cs, -h);
+            place(wheels, 2 * ny + 1, x - hx * w0, 0, z - hz * w0, cs, cs, cs, -h);
+            ny++;
+            bob = 0.8 * cs; // pedalling, not walking
           }
           place(bodies, nb, x, bob, z, s, s, s, -h);
           place(heads, nb, x, bob, z, s, s, s, -h);
@@ -509,6 +527,8 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
       carBody.count = carTop.count = nc;
       autoBody.count = autoTop.count = na;
       scooter.count = ns;
+      cycle.count = ny;
+      wheels.count = 2 * ny;
 
       // buses glide between server frames like everyone else
       const was = new Map((prev?.buses ?? []).map((b) => [b[0], b]));
@@ -575,7 +595,7 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
       }
       pin.count = pinHead.count = pinRing.count = np;
 
-      for (const m of [bodies, heads, carBody, carTop, autoBody, autoTop, scooter, busBody, busWin, busRoof, copBody, copTop, copBand, copLights, pin, pinHead, pinRing]) {
+      for (const m of [bodies, heads, carBody, carTop, autoBody, autoTop, scooter, cycle, wheels, busBody, busWin, busRoof, copBody, copTop, copBand, copLights, pin, pinHead, pinRing]) {
         m.instanceMatrix.needsUpdate = true;
         if (m.instanceColor) m.instanceColor.needsUpdate = true;
       }

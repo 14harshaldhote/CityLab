@@ -464,6 +464,10 @@ function drawBuilding(g: Graphics, b: Building, height: number) {
       g.rect(cx - 3, cy - 10, 6, 20).fill(0xd2463c);
       g.rect(cx - 10, cy - 3, 20, 6).fill(0xd2463c);
       break;
+    case "clinic":
+      g.rect(cx - 2, cy - 6, 4, 12).fill(0xd2463c);
+      g.rect(cx - 6, cy - 2, 12, 4).fill(0xd2463c);
+      break;
     case "city_hall":
       g.circle(cx, cy, Math.min(b.w, b.h) * 0.22).fill(0xf6e3a3).stroke(ink);
       g.circle(cx - 3, cy - 3, Math.min(b.w, b.h) * 0.08).fill({ color: 0xffffff, alpha: 0.7 });

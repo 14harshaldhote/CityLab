@@ -22,6 +22,14 @@ first; and a rushed check-up is more likely to miss what's wrong, which means a
 slower recovery and a second visit. A patient's faith, name or neighbourhood never
 changes how they're treated: the tests check that.
 
+**Private clinics.** Next to the Civil Hospital, neighbourhood doctors run small
+clinics: a short wait, a ₹200 fee, and medicines from the clinic's own counter.
+Families who can afford it mostly go private for everyday illness, as in real
+Indian towns; those who can't, or who trust the hospital, go to the Civil
+Hospital, where treatment is cheap or free but the queue is long. Each patient
+remembers how it went, and that memory, and friends' tips, steer where they go
+next time (see ``brain.py``).
+
 **Happiness.** Every night each person's life satisfaction is worked out from five
 things: how their day felt (their needs), money (savings and debt), work (a job,
 school or a pension, against looking for work), friends, health, and their feelings (joy against sadness, fear and anger). The city's
@@ -39,14 +47,16 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from .clock import MINUTES_PER_DAY, SimTime
-from .people import HOSPITAL, JAIL, WORK, Person
+from .people import HOSPITAL, JAIL, WORK, Person, learn
 
 if TYPE_CHECKING:
     from .world import World
 
 LADDER = 1.8  # tuned so a typical Kamalnagar adult answers about as Indians do in the World Happiness Report
 DOCTOR_SKILL = 0.72  # hospital staff at least this skilled work as doctors; the rest are nurses and orderlies
-CONSULT_FEE = 30.0
+CONSULT_FEE = 30.0  # the Civil Hospital's registration fee
+CLINIC_FEE = 200.0  # a neighbourhood doctor's fee
+PHARMACY_MARGIN = 0.25  # what a clinic keeps on the medicines it sells
 MEDICINES = {1: 40.0, 2: 120.0, 3: 400.0}
 FREE_BELOW = 1500.0  # patients with less than this in the bank are treated free; the city pays
 BASE_MINUTES = {1: 8.0, 2: 14.0, 3: 25.0}
@@ -83,8 +93,11 @@ def _weights(age: float, month: int) -> np.ndarray:
     return v / v.sum()
 
 
+CARE = ("hospital", "clinic")
+
+
 def is_doctor(w: World, p: Person) -> bool:
-    return p.job is not None and w.city.buildings[p.job.building].kind == "hospital" and p.skill >= DOCTOR_SKILL
+    return p.job is not None and w.city.buildings[p.job.building].kind in CARE and p.skill >= DOCTOR_SKILL
 
 
 def style(p: Person) -> dict[str, float]:
@@ -102,7 +115,12 @@ class Health:
         self.visits: deque[dict[str, Any]] = deque(maxlen=4000)  # every consultation, newest last
         self.seen_today: dict[int, int] = defaultdict(int)  # doctor -> patients seen this shift-day
         self.arrivals: deque[tuple[int, int]] = deque(maxlen=200)  # (minute, hospital) of recent arrivals, for the queue
-        self.today = {"fell_ill": 0, "visits": 0, "recovered": 0, "wait": 0.0, "satisfaction": 0.0, "fees": 0.0}
+        self.today = self._fresh()
+
+    @staticmethod
+    def _fresh() -> dict[str, float]:
+        return {"fell_ill": 0, "visits": 0, "recovered": 0, "wait": 0.0, "satisfaction": 0.0, "fees": 0.0,
+                "clinic_visits": 0, "clinic_wait": 0.0, "clinic_satisfaction": 0.0}
 
     # ---- falling ill and getting better ----------------------------------------------------
 
@@ -137,17 +155,22 @@ class Health:
             self.today["fell_ill"] += 1
             if ill.severity == 3:
                 w.emit("sick", f"{p.name} came down with {ill.name}.", (p.id,), illness=ill.name, severity=ill.severity)
-        visits = self.today["visits"]
+        d = self.today
+        visits, clinic = d["visits"], d["clinic_visits"]
         row = {
             "sick": sum(1 for p in w.alive() if p.illness not in (None, CHECKUP)),
-            "fell_ill": self.today["fell_ill"],
-            "recovered": self.today["recovered"],
+            "fell_ill": d["fell_ill"],
+            "recovered": d["recovered"],
             "hospital_visits": visits,
-            "hospital_wait": round(self.today["wait"] / visits, 1) if visits else None,
-            "patient_satisfaction": round(self.today["satisfaction"] / visits, 3) if visits else None,
+            "hospital_wait": round(d["wait"] / visits, 1) if visits else None,
+            "patient_satisfaction": round(d["satisfaction"] / visits, 3) if visits else None,
+            "clinic_visits": clinic,
+            "clinic_wait": round(d["clinic_wait"] / clinic, 1) if clinic else None,
+            "clinic_satisfaction": round(d["clinic_satisfaction"] / clinic, 3) if clinic else None,
+            "doctor_visits": visits + clinic,
             "doctors": sum(1 for p in w.alive() if is_doctor(w, p)),
         }
-        self.today = {"fell_ill": 0, "visits": 0, "recovered": 0, "wait": 0.0, "satisfaction": 0.0, "fees": 0.0}
+        self.today = self._fresh()
         self.seen_today = defaultdict(int)
         return row
 
@@ -157,10 +180,14 @@ class Health:
         return p.illness is not None and p.wants_doctor and not p.seen_doctor
 
     def consult(self, p: Person, hospital: int, t: int) -> int:
-        """A patient arrives: wait, see a doctor, pay, go home with a diagnosis. Returns when they leave."""
+        """A patient arrives at the Civil Hospital or a clinic: wait, see a doctor, pay, go home with a diagnosis.
+
+        Returns when they leave.
+        """
         w = self.w
         rng = w.streams("health")
         age = p.age(t)
+        private = w.city.buildings[hospital].kind == "clinic"
         doctors = [q for q in (w.people[i] for i in w.job_holders.get(hospital, []))
                    if is_doctor(w, q) and q.activity == WORK and q.place == hospital]
         while self.arrivals and self.arrivals[0][0] < t - 60:
@@ -173,7 +200,10 @@ class Health:
         else:  # nobody on duty: the duty nurse does what they can
             doc, s = None, {"care": 0.6, "thoroughness": 0.4, "calm": 0.5, "experience": 0.35}
         on_duty = max(1, len(doctors))
-        wait = int(round(8 + 18 * queue / on_duty + (25 if doc is None else 0) + float(rng.uniform(0, 10))))
+        if private:  # a small waiting room, and the doctor sees people by appointment in the evening rush
+            wait = int(round(5 + 12 * queue / on_duty + (20 if doc is None else 0) + float(rng.uniform(0, 8))))
+        else:
+            wait = int(round(8 + 18 * queue / on_duty + (25 if doc is None else 0) + float(rng.uniform(0, 10))))
         tired = min(1.0, self.seen_today[doc.id] / 10.0) if doc is not None else 0.5
         # how this doctor handles this patient
         attention = 1.15 if age < 13 else 1.25 if age >= 65 else 1.0
@@ -195,35 +225,53 @@ class Health:
             p.well_at = max(p.well_at, t + int(ill.days * MINUTES_PER_DAY * 1.3))
             p.wants_doctor = p.severity >= 2
             p.seen_doctor = p.severity < 2
-        # the bill: a consultation fee and medicines, free for those who can't afford it
+        # the bill: a consultation fee and medicines, free at the hospital for those who can't afford it
         econ = w.economy
-        bill = CONSULT_FEE + MEDICINES[p.severity]
         acct = econ.person(p.id)
-        if econ.balance[acct] - bill >= FREE_BELOW:
-            econ.transfer(acct, "city", bill, "hospital fees")
-            paid = bill
+        payer = w.transport._payer(p, age)
+        if private:  # the family pays the clinic in full; it keeps a margin on the medicines
+            clinic = econ.company(hospital)
+            payer_acct = econ.person(payer.id) if payer is not None else acct
+            paid = econ.transfer(payer_acct, clinic, CLINIC_FEE + MEDICINES[p.severity], "clinic fees")
+            econ.transfer(clinic, "outside", MEDICINES[p.severity] * (1 - PHARMACY_MARGIN), "medicines")
+            econ.company_sales[hospital] += CLINIC_FEE + MEDICINES[p.severity] * PHARMACY_MARGIN
         else:
-            paid = 0.0
-        econ.transfer("city", "outside", MEDICINES[p.severity] * 0.8, "medicines")
+            bill = CONSULT_FEE + MEDICINES[p.severity]
+            if econ.balance[acct] - bill >= FREE_BELOW:
+                econ.transfer(acct, "city", bill, "hospital fees")
+                paid = bill
+            else:
+                paid = 0.0
+            econ.transfer("city", "outside", MEDICINES[p.severity] * 0.8, "medicines")
         if doc is not None:
             self.seen_today[doc.id] += 1
-        self.today["visits"] += 1
-        self.today["wait"] += wait
-        self.today["satisfaction"] += satisfaction
+        d = self.today
+        if private:
+            d["clinic_visits"] += 1
+            d["clinic_wait"] += wait
+            d["clinic_satisfaction"] += satisfaction
+        else:
+            d["visits"] += 1
+            d["wait"] += wait
+            d["satisfaction"] += satisfaction
         visit = {"t": t, "patient": p.id, "doctor": doc.id if doc else None, "illness": p.illness, "severity": p.severity,
                  "age": round(age, 1), "group": age_group(age), "wait": wait, "minutes": minutes, "kindness": round(kindness, 3),
                  "correct": correct, "satisfaction": satisfaction, "tired": round(tired, 2), "paid": paid,
-                 "nth": self.seen_today[doc.id] if doc else 0}
+                 "nth": self.seen_today[doc.id] if doc else 0, "place": hospital, "private": private}
         self.visits.append(visit)
+        # they'll remember how it went, and it decides where they go next time
+        learn(p.likes, hospital, (satisfaction - 0.55) * 3.0 + (0.0 if correct else -0.4))
         who = f"Dr. {doc.name}" if doc else "The duty nurse"
         manner = ("a rushed" if tired > 0.6 and minutes < needed else "a careful" if minutes >= needed * 1.2 else "a")
         heal = round((p.well_at - t) / MINUTES_PER_DAY)
         outcome = ("All clear." if p.illness == CHECKUP else
                    f"Expected to be well in about {max(1, heal)} {'day' if heal <= 1 else 'days'}." if correct else
                    "The diagnosis was wrong, so getting better may take longer.")
-        w.emit("treated", f"{who} saw {p.name} for {p.illness} after a {wait}-minute wait: {manner} {minutes}-minute visit. "
+        where = f" at {w.city.buildings[hospital].name.split(',')[0]}" if private else ""
+        w.emit("treated", f"{who} saw {p.name} for {p.illness}{where} after a {wait}-minute wait: {manner} {minutes}-minute visit. "
                + outcome + ("" if paid else " Treated free."),
-               (p.id,) + ((doc.id,) if doc else ()), hospital, doctor=doc.id if doc else None, wait=wait, minutes=minutes, correct=correct, satisfaction=satisfaction)
+               (p.id,) + ((doc.id,) if doc else ()), hospital, doctor=doc.id if doc else None, wait=wait, minutes=minutes, correct=correct,
+               satisfaction=satisfaction, private=private)
         return t + wait + minutes
 
     # ---- views ------------------------------------------------------------------------------------
@@ -241,13 +289,27 @@ class Health:
             vs = by.get(p.id, [])
             n = len(vs)
             out.append({
-                "id": p.id, "name": p.name, "style": {k: round(v, 2) for k, v in style(p).items()}, "patients": n,
+                "id": p.id, "name": p.name, "place": w.city.buildings[p.job.building].name, "clinic": w.city.buildings[p.job.building].kind == "clinic",
+                "style": {k: round(v, 2) for k, v in style(p).items()}, "patients": n,
                 "minutes": round(sum(v["minutes"] for v in vs) / n, 1) if n else None,
                 "kindness": round(sum(v["kindness"] for v in vs) / n, 2) if n else None,
                 "right": round(sum(v["correct"] for v in vs) / n, 2) if n else None,
                 "satisfaction": round(sum(v["satisfaction"] for v in vs) / n, 2) if n else None,
             })
         return sorted(out, key=lambda d: (-d["patients"], d["id"]))
+
+    def places(self, visits: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """The Civil Hospital and each clinic: how many came, how long they waited, how they rated it."""
+        w = self.w
+        out = []
+        for b in w._by_kind["hospital"] + w._by_kind["clinic"]:
+            vs = [v for v in visits if v.get("place", b.id if b.kind == "hospital" else -1) == b.id]
+            n = len(vs)
+            out.append({"id": b.id, "name": b.name, "kind": b.kind, "district": b.district, "visits": n,
+                        "wait": round(sum(v["wait"] for v in vs) / n, 1) if n else None,
+                        "satisfaction": round(sum(v["satisfaction"] for v in vs) / n, 2) if n else None,
+                        "fan_club": sum(1 for p in w.alive() if p.likes.get(b.id, 0.0) > 0.3)})
+        return out
 
     def behaviour(self, since: int = 0) -> dict[str, Any]:
         """How check-ups change from patient to patient: by age, seriousness and how tired the doctor is."""
@@ -279,7 +341,9 @@ class Health:
             "month": {"visits": n, "wait": round(sum(v["wait"] for v in recent) / n, 1) if n else None,
                       "satisfaction": round(sum(v["satisfaction"] for v in recent) / n, 2) if n else None,
                       "right": round(sum(v["correct"] for v in recent) / n, 2) if n else None,
-                      "free": sum(1 for v in recent if not v["paid"])},
+                      "free": sum(1 for v in recent if not v["paid"]),
+                      "private": sum(1 for v in recent if v.get("private"))},
+            "places": self.places(recent),
             "doctors": self.doctor_stats(month),
             "behaviour": self.behaviour(month),
         }
@@ -306,6 +370,8 @@ def satisfaction(w: World, p: Person) -> dict[str, float]:
     age = p.age(t)
     if p.job is not None:
         work = 0.3 + 0.5 * min(1.0, p.job.wage / 1500.0)  # better-paid, steadier work is more satisfying
+    elif p.trade:
+        work = 0.4  # their own work, but no payslip, no sick pay and no pension
     elif p.school is not None:
         work = 0.6
     elif p.retired or p.at_home or age < 18:

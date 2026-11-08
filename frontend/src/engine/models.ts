@@ -247,6 +247,15 @@ export function buildingModel(b: Building): Model {
       glaze(cx, cz, b.w * 0.75, b.h * 0.55, 0, H);
       break;
     }
+    case "clinic": {
+      // a small clinic: two storeys, a shopfront awning and a red cross sign
+      P("box", cx, 0, cz, b.w * 0.6, H, b.h * 0.5, 0xf4dede);
+      P("box", cx, H * 0.45, cz + b.h * 0.27, b.w * 0.5, 0.6, 4, C.white);
+      P("box", cx, H, cz, 3, 0.5, 10, C.red);
+      P("box", cx, H, cz, 10, 0.5, 3, C.red);
+      glaze(cx, cz, b.w * 0.6, b.h * 0.5, 0, H);
+      break;
+    }
     case "police": {
       P("box", cx, 0, cz, b.w * 0.7, H, b.h * 0.55, 0xe7ecf3);
       P("box", cx, H - 4, cz, b.w * 0.72, 4, b.h * 0.57, C.blue);

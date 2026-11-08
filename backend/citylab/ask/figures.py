@@ -191,10 +191,13 @@ def health(w: Any, behaviour: bool = False) -> list[str]:
     doctors = view["doctors"]
     m = view["month"]
     staff = len(w.job_holders.get(next((b.id for b in w.city.buildings if b.kind == "hospital"), -1), []))
-    s = [f"The Civil Hospital has {staff} staff, {len(doctors)} of them doctors. {view['sick']} people are ill right now"
+    in_hospital = [d for d in doctors if not d.get("clinic")]
+    s = [f"The Civil Hospital has {staff} staff, {len(in_hospital)} of them doctors, and {len(doctors) - len(in_hospital)} more doctors run "
+         f"private clinics. {view['sick']} people are ill right now"
          + (": " + ", ".join(f"{n} with {k}" for k, n in list(view["by_illness"].items())[:4]) if view["by_illness"] else "") + "."]
     if m["visits"]:
-        s.append(f"In the last 30 days doctors saw {m['visits']} patients (check-ups included). The average wait was {m['wait']:.0f} minutes, "
+        s.append(f"In the last 30 days doctors saw {m['visits']} patients (check-ups included), {m['private']} of them at private clinics. "
+                 f"The average wait was {m['wait']:.0f} minutes ({_waits(view['places'])}), "
                  f"patients rated their visit {m['satisfaction'] * 10:.1f} out of 10, doctors got the diagnosis right {m['right'] * 100:.0f}% "
                  f"of the time, and {m['free']} {'patient' if m['free'] == 1 else 'patients'} who couldn't afford it {'was' if m['free'] == 1 else 'were'} treated free.")
     seen = [d for d in doctors if d["patients"] >= 3]
@@ -210,11 +213,21 @@ def health(w: Any, behaviour: bool = False) -> list[str]:
     if rows and rows[-1].get("town_sick") is not None:
         total = rows[-1]["town_population"]
         s.append(f"Across the whole town, {lakh(rows[-1]['town_sick'])} of {lakh(total)} people are ill ({100 * rows[-1]['town_sick'] / total:.1f}%), "
-                 f"{lakh(_town_sum(rows, 'fell_ill'))} fell ill in the last {len(rows)} days and doctors saw {lakh(_town_sum(rows, 'hospital_visits'))} "
+                 f"{lakh(_town_sum(rows, 'fell_ill'))} fell ill in the last {len(rows)} days and doctors saw {lakh(_town_sum(rows, 'doctor_visits'))} "
                  f"patients. A town this size has about {lakh(w.town.services(total)['doctors'])} doctors.")
     if behaviour:
         s.extend(doctor_behaviour(w))
     return s
+
+
+def _waits(places: list[dict[str, Any]]) -> str:
+    hosp = [p for p in places if p["kind"] == "hospital" and p["visits"]]
+    clin = [p for p in places if p["kind"] == "clinic" and p["visits"]]
+    bits = [f"{p['wait']:.0f} at the Civil Hospital" for p in hosp]
+    if clin:
+        n = sum(p["visits"] for p in clin)
+        bits.append(f"{sum(p['wait'] * p['visits'] for p in clin) / n:.0f} at the clinics")
+    return ", ".join(bits) or "no visits"
 
 
 def doctor_behaviour(w: Any) -> list[str]:
@@ -435,12 +448,15 @@ def in_group(w: Any, p: Any, g: str) -> bool:
         return econ.balance.get(econ.person(p.id), 0.0) < 2500
     if g == "rich":
         return econ.balance.get(econ.person(p.id), 0.0) >= 50_000
+    if g == "informal":
+        return bool(p.trade)
     return False
 
 
 GROUP_NAMES = {"unemployed": "people looking for work", "retired": "retired people", "workers": "people with a job",
                "cash": "people paid cash in hand", "doctors": "doctors", "police": "police officers", "teachers": "teachers",
-               "poor": "people with under ₹500 saved", "rich": "people with ₹10,000 or more saved"}
+               "poor": "people with under ₹2,500 saved", "rich": "people with ₹50,000 or more saved",
+               "informal": "street vendors, maids and day labourers"}
 
 
 def _parts(w: Any, people: list[Any]) -> dict[str, float]:
@@ -722,6 +738,116 @@ __all__ = ["SUBJECT_KINDS", "budget", "by_group", "cctv", "council", "doctor_mis
 
 
 # ---- the whole town -------------------------------------------------------------------------------------
+
+def informal(w: Any) -> list[str]:
+    """The work with no office and no payslip: carts, homes, the labour naka."""
+    from ..core.informal import informal_share
+
+    v = w.informal.view()
+    day = v["a_day"]
+    s = [f"{v['vendors']} street vendors, {v['maids']} domestic workers and {v['labourers']} day labourers work on the map, with no "
+         f"payslip, no tax and no pension; another {v['cash_in_hand']} have jobs paid cash in hand. Together that's "
+         f"{informal_share(w) * 100:.0f}% of the {v['workers']} people in work."]
+    bits = []
+    if day["vendor"]:
+        bits.append(f"a vendor takes about {rs(day['vendor'])} a day, and keeps about 40% of it after buying stock at the mandi")
+    if day["maid"]:
+        bits.append(f"a domestic worker earns about {rs(day['maid'])} a day from her homes ({v['homes_with_maid']} homes have one)")
+    if day["labourer"]:
+        bits.append(f"a day labourer gets {rs(day['labourer'])} on a day they're picked")
+    if bits:
+        s.append("Over the last week " + "; ".join(bits) + ".")
+    if v["naka"]["waiting"]:
+        s.append(f"Each morning about {v['naka']['waiting']:.0f} labourers wait at the naka by {v['naka_place'].split(',')[0]}, and about "
+                 f"{v['naka']['picked']:.0f} are picked for work; the rest go home with nothing that day.")
+    return s
+
+
+def travel(w: Any) -> list[str]:
+    """How people get about, from the last week of trips."""
+    rows = _last(w, 7)
+    modes = (("walk", "on foot"), ("scooter", "by scooter or motorbike"), ("cycle", "by cycle"), ("car", "by car"), ("bus", "by bus"),
+             ("auto", "by auto-rickshaw"), ("shared", "by shared auto"))
+    counts = {m: _sum(rows, f"trips_{m}") for m, _ in modes}
+    total = sum(counts.values())
+    if not total:
+        return []
+    order = sorted(modes, key=lambda m: -counts[m[0]])
+    s = [f"In the last {len(rows)} days people on the map made {lakh(total)} trips: "
+         + ", ".join(f"{100 * counts[m] / total:.0f}% {words}" for m, words in order if counts[m]) + "."]
+    hhs = [h for h in w.households.values() if h.members]
+    n = max(1, len(hhs))
+    s.append(f"{100 * sum(h.has_scooter for h in hhs) / n:.0f}% of homes have a scooter, {100 * sum(h.has_cycle for h in hhs) / n:.0f}% a "
+             f"cycle and {100 * sum(h.has_car for h in hhs) / n:.0f}% a car. Shared autos run along the main roads for ₹15 a seat.")
+    ways: dict[str, list[float]] = {}
+    for p in w.alive():
+        for k, v in p.ways.items():
+            ways.setdefault(k, []).append(v)
+    if ways:
+        liked = {k: sum(v) / len(v) for k, v in ways.items() if len(v) >= 10}
+        if liked:
+            best, worst = max(liked, key=liked.get), min(liked, key=liked.get)
+            names = dict(modes)
+            s.append(f"From their own trips, people like getting about {names.get(best, best)} best and {names.get(worst, worst)} least "
+                     "(a long wait for a packed bus, or a soaking in the rain, puts them off).")
+    return s
+
+
+def clinics(w: Any) -> list[str]:
+    view = w.health.view()
+    m = view["month"]
+    s = []
+    if m["visits"]:
+        s.append(f"In the last 30 days {m['private']} of {m['visits']} doctor visits ({100 * m['private'] / m['visits']:.0f}%) were to private "
+                 "clinics; in real Indian towns about three in four are.")
+    for pl in view["places"]:
+        if pl["visits"]:
+            s.append(f"{pl['name']}: {pl['visits']} patients, an average wait of {pl['wait']:.0f} minutes, rated {pl['satisfaction'] * 10:.1f}/10; "
+                     f"{pl['fan_club']} people count it as their doctor.")
+    s.append("A clinic charges ₹200 and sells its own medicines; the Civil Hospital charges ₹30 and treats people with little money free. "
+             "Families who can afford it go private; each patient remembers how it went, and friends pass on which doctor to see.")
+    return s
+
+
+def habits(w: Any) -> list[str]:
+    """What the town has learned: favourite places, places avoided, tips passed on."""
+    alive = [p for p in w.alive() if p.age(w.t) >= 18]
+    if not alive:
+        return []
+    fans: Counter = Counter()
+    avoid: Counter = Counter()
+    for p in alive:
+        for b, v in p.likes.items():
+            if v > 0.3:
+                fans[b] += 1
+            elif v < -0.3:
+                avoid[b] += 1
+    with_fav = sum(1 for p in alive if any(v > 0.3 for v in p.likes.values()))
+    tried = sum(len(p.likes) for p in alive) / len(alive)
+    s = [f"Nobody starts out knowing the town: people try places, remember how each visit went, and go back to what suits them. "
+         f"{100 * with_fav / len(alive):.0f}% of adults now have a favourite place, and on average each has tried {tried:.1f} places."]
+    names = lambda c: ", ".join(f"{w.city.buildings[b].name.split(',')[0]} ({n})" for b, n in c.most_common(3))  # noqa: E731
+    if fans:
+        s.append(f"The best-loved places are {names(fans)}.")
+    if avoid:
+        s.append(f"The most avoided are {names(avoid)}.")
+    s.append("Friends pass on tips about places they love or hate, so word of mouth spreads; trusting people take a tip more to heart.")
+    return s
+
+
+def person_habits(h: dict[str, Any]) -> list[str]:
+    s = []
+    if h["favourites"]:
+        s.append("Their favourite places: " + ", ".join(f["name"].split(",")[0] for f in h["favourites"]) + ".")
+    if h["avoids"]:
+        s.append("They avoid " + " and ".join(f["name"].split(",")[0] for f in h["avoids"]) + ".")
+    if h["ways"]:
+        best = next(iter(h["ways"]))
+        words = {"walk": "walking", "cycle": "cycling", "bus": "the bus", "shared": "shared autos", "auto": "autos"}
+        if h["ways"][best] > 0.1:
+            s.append(f"From experience they like {words.get(best, best)} best for getting about.")
+    return s
+
 
 def lakh(n: float) -> str:
     """A whole number written the Indian way: 2,00,000 rather than 200,000."""

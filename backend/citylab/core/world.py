@@ -24,7 +24,8 @@ from .agencies import SITE_WAGE, Government
 from .economy import Economy
 from .events import Event, EventBus
 from .faith import PLACE_KINDS, festival_on
-from .health import Health
+from .health import DOCTOR_SKILL, Health
+from .informal import Informal
 from .mind import Mind
 from .names import RELIGION_LABEL, family_name, first_name, pick_religion
 from .people import ACTIVITY_NAMES, SLEEP, TRAVEL, Household, Job, Person
@@ -33,7 +34,7 @@ from .routing import Router
 from .transport import Transport
 from .crime import Crime
 from .policy import Policy
-from .realworld import CAR_OWNERS, LAST_WORKING_AGE, SCOOTER_OWNERS, RETIREMENT_AGE, TOWN_POPULATION, UNEMPLOYMENT, work_force_share
+from .realworld import CAR_OWNERS, CYCLE_OWNERS, LAST_WORKING_AGE, SCOOTER_OWNERS, RETIREMENT_AGE, TOWN_POPULATION, UNEMPLOYMENT, work_force_share
 from .social import SocialGraph
 from .town import Town
 from .weather import Weather
@@ -60,7 +61,7 @@ class World:
         self._next_hh = 0
         self.daily: list[dict[str, Any]] = []  # one row of statistics per simulated day
         self.today = lifecycle.DayCounts()
-        self._by_kind = {k: [b for b in self.city.buildings if b.kind == k] for k in ("restaurant", "shop", "park", "school", "hospital", *PLACE_KINDS)}
+        self._by_kind = {k: [b for b in self.city.buildings if b.kind == k] for k in ("restaurant", "shop", "park", "school", "hospital", "clinic", *PLACE_KINDS)}
         self.festival: tuple[str, str, str] | None = festival_on(0)
         self._near_cache: dict[tuple[int, str], list] = {}
         self._open_t, self._open = -1, {}
@@ -70,6 +71,7 @@ class World:
         self.brain = Brain(self)
         self.economy = Economy(self)
         self._founded = False
+        self.informal = Informal(self)
         self.government = Government(self)
         self.transport = Transport(self)
         self.crime = Crime(self)
@@ -160,8 +162,8 @@ class World:
             self.economy.open(p)
         return p
 
-    def new_household(self, home: int, has_car: bool, has_scooter: bool = False) -> Household:
-        hh = Household(id=self._next_hh, home=home, members=[], has_car=has_car, has_scooter=has_scooter)
+    def new_household(self, home: int, has_car: bool, has_scooter: bool = False, has_cycle: bool = False) -> Household:
+        hh = Household(id=self._next_hh, home=home, members=[], has_car=has_car, has_scooter=has_scooter, has_cycle=has_cycle)
         self._next_hh += 1
         self.households[hh.id] = hh
         self.occupancy[home].append(hh.id)
@@ -183,9 +185,11 @@ class World:
     # ---- jobs and schools ---------------------------------------------------------------
 
     def vacancies(self) -> list[tuple[int, int]]:
-        """(building, slot index) for every unfilled job."""
+        """(building, slot index) for every unfilled job. Building sites take their crews from the labour naka, day by day."""
         out = []
         for b, holders in self.job_holders.items():
+            if self.city.buildings[b].status == "construction":
+                continue
             for k in range(len(holders), len(self.city.buildings[b].jobs)):
                 out.append((b, k))
         return out
@@ -194,7 +198,12 @@ class World:
         b = self.city.buildings[building]
         slot = len(self.job_holders[building])
         shift = b.jobs[slot % len(b.jobs)]
+        if b.kind == "clinic" and not any(self.people[q].skill >= DOCTOR_SKILL for q in self.job_holders[building]):
+            # a clinic is a doctor's practice: whoever takes it on first is the qualified doctor
+            p.skill = max(p.skill, DOCTOR_SKILL + 0.08 + 0.1 * (stable_hash("doctor", p.id) % 100) / 100)
         wage = (SITE_WAGE if b.status == "construction" else b.type.wage) * (0.8 + 0.6 * p.skill)
+        if p.trade:  # a proper job: the cart, the homes or the naka can wait
+            self.informal.drop(p)
         p.job = Job(building=building, shift=shift, wage=round(wage, 2), since=self.t)
         p.cash_job = self.economy.offers_cash(b)
         p.unemployed_since = None
@@ -211,6 +220,8 @@ class World:
         if b.kind in self._by_kind:
             self._by_kind[b.kind].append(b)
         self._near_cache.clear()
+        if hasattr(self, "brain"):
+            self.brain._near.clear()
         self._open_t = -1
         if b.jobs and b.kind not in ("school", "hospital", "police", "city_hall", "park"):
             self.economy.credit.setdefault(self.economy.company(b.id), 650.0)
@@ -244,17 +255,29 @@ class World:
 
     # ---- places -----------------------------------------------------------------------------
 
-    def nearest_open(self, here: int, kind: str, t: int) -> int | None:
-        if self._open_t != t:  # many people choose in the same minute: answer each question once
+    def _kind_open(self, kind: str, t: int) -> bool:
+        """Every place of a kind keeps the same hours, so one look per kind per minute does."""
+        if self._open_t != t:
             self._open_t, self._open = t, {}
-        key = (here, kind)
-        if key in self._open:
-            return self._open[key]
-        st = SimTime(t)
-        mod, weekend = st.minute_of_day, st.is_weekend
-        found = next((b.id for b in self._nearby(here, kind) if b.is_open(mod, weekend)), None)
-        self._open[key] = found
-        return found
+        hit = self._open.get(kind)
+        if hit is None:
+            st = SimTime(t)
+            places = self._by_kind.get(kind)
+            hit = bool(places) and places[0].is_open(st.minute_of_day, st.is_weekend)
+            self._open[kind] = hit
+        return hit
+
+    def nearest_open(self, here: int, kind: str, t: int) -> int | None:
+        if not self._kind_open(kind, t):
+            return None
+        near = self._nearby(here, kind)
+        return near[0].id if near else None
+
+    def open_nearby(self, here: int, kind: str, t: int, k: int = 3) -> list[int]:
+        """The ``k`` nearest places of a kind that are open now, nearest first."""
+        if not self._kind_open(kind, t):
+            return []
+        return [b.id for b in self._nearby(here, kind)[:k]]
 
     def _nearby(self, here: int, kind: str) -> list:
         key = (here, kind)
@@ -280,12 +303,13 @@ class World:
         for home in order:
             if made >= target:
                 break
-            hh = self.new_household(home, has_car=bool(rng.random() < CAR_OWNERS), has_scooter=bool(rng.random() < SCOOTER_OWNERS))
+            hh = self.new_household(home, has_car=bool(rng.random() < CAR_OWNERS), has_scooter=bool(rng.random() < SCOOTER_OWNERS),
+                                    has_cycle=bool(self.streams("cycles").random() < CYCLE_OWNERS))
             faith = pick_religion(rng)
             last = family_name(rng, faith)
             # Indian town households: mostly parents and children, often with grandparents, and grown-up
-            # children live at home until they marry (about 4.4 people a household, Census 2011)
-            kind = rng.choice(["single", "couple", "family", "joint", "single_parent", "seniors"], p=[0.13, 0.11, 0.45, 0.23, 0.04, 0.04])
+            # children live at home until they marry (about 4 people a household, NFHS-5); few people live alone
+            kind = rng.choice(["single", "couple", "family", "joint", "single_parent", "seniors"], p=[0.06, 0.1, 0.49, 0.27, 0.04, 0.04])
             adults: list[Person] = []
             if kind == "seniors":
                 a = 62 + rng.integers(0, 25)
@@ -328,7 +352,7 @@ class World:
         vac = self.vacancies()
         vac_order = [vac[i] for i in rng.permutation(len(vac))]
         # the hospital and the police station are staffed first, as any real town's are
-        vac_order.sort(key=lambda v: self.city.buildings[v[0]].kind not in ("hospital", "police"))
+        vac_order.sort(key=lambda v: self.city.buildings[v[0]].kind not in ("hospital", "police", "clinic"))
         for p in self.alive():
             age = p.age(0)
             p.skill = float(np.clip(rng.normal(0.25 + min(age, 45) / 90.0, 0.12), 0.05, 0.95))
@@ -345,6 +369,9 @@ class World:
             elif rng.random() >= share:
                 p.at_home = True  # studying, keeping house or caring for family: not looking for paid work
                 continue
+            trade = self.informal.choose_trade(p) if age < RETIREMENT_AGE + 5 else None
+            if trade is not None and self.informal.take_up(p, trade):
+                continue  # a cart, a round of homes, or the labour naka
             if rng.random() < 1.0 - UNEMPLOYMENT and vac_order:
                 home = self.city.buildings[self.households[p.household].home]
                 # take one of the nearer open jobs, as people tend to
@@ -481,14 +508,33 @@ class World:
             if p.alive and p.illness else None,
             "happiness": round(p.happiness, 2),
             "cash_job": p.cash_job,
+            "trade": p.trade or None,
+            "trade_place": self.city.buildings[p.pitch].name if p.pitch is not None else None,
+            "clients": len(p.clients),
             "mind": self.mind.person(p),
+            "habits": self.habits(p),
+        }
+
+    def habits(self, p: Person) -> dict[str, Any]:
+        """What experience has taught them: favourite and least favourite places, and how they like to get about."""
+        likes = sorted(((v, b) for b, v in p.likes.items() if b < len(self.city.buildings)), reverse=True)
+
+        def place(v: float, b: int) -> dict[str, Any]:
+            bb = self.city.buildings[b]
+            return {"id": b, "name": bb.name, "kind": bb.kind, "like": round(v, 2)}
+
+        return {
+            "favourites": [place(v, b) for v, b in likes[:3] if v > 0.15],
+            "avoids": [place(v, b) for v, b in likes[::-1][:2] if v < -0.15],
+            "ways": {k: round(v, 2) for k, v in sorted(p.ways.items(), key=lambda kv: -kv[1])},
+            "tried": len(p.likes),
         }
 
     def summary(self) -> dict[str, Any]:
         alive = self.alive()
         t = self.t
         working_age = [p for p in alive if 18 <= p.age(t) < 65 and p.school is None]
-        employed = sum(1 for p in working_age if p.job)
+        employed = sum(1 for p in working_age if p.job or p.trade)
         return {
             "t": t,
             "label": self.now.label(),

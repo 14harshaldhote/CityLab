@@ -29,12 +29,33 @@ BIRTHS_PER_1000 = 16.0
 DEATHS_PER_1000 = 5.6
 # chance of dying in a year, by age band: an urban life table, summing to about 5.6 per 1,000
 DEATH_RATE_BY_AGE = (0.0045, 0.0005, 0.0011, 0.0021, 0.0065, 0.031)
+# the same table as a smooth curve by exact age, for the people on the map: the first year is the
+# riskiest (about 18 babies in 1,000 die, SRS), and from middle age the risk rises about 9% a year
+DEATH_CURVE = ((0.5, 0.018), (3.5, 0.001), (12.0, 0.0005), (24.0, 0.0011), (37.0, 0.0021), (52.0, 0.0065), (73.0, 0.031))
+OLD_AGE_SLOPE = 0.085
+
+
+def death_rate(age: float) -> float:
+    """Yearly chance of dying at an exact age, smoothed so each band averages out to the life table above."""
+    import math
+
+    (a_first, r_first), (a_last, r_last) = DEATH_CURVE[0], DEATH_CURVE[-1]
+    if age >= a_last:
+        return min(1.0, r_last * math.exp(OLD_AGE_SLOPE * (age - a_last)))
+    if age <= a_first:
+        return r_first
+    for (a0, r0), (a1, r1) in zip(DEATH_CURVE, DEATH_CURVE[1:]):
+        if a0 <= age < a1:
+            f = (age - a0) / (a1 - a0)
+            return math.exp(math.log(r0) + f * (math.log(r1) - math.log(r0)))
+    return r_last
 NET_MIGRATION = 0.013  # towns grow about 2.3% a year: 1% from births, the rest from people moving in
 MIGRANT_AGES = (0.10, 0.15, 0.45, 0.22, 0.06, 0.02)
 
 # getting about (NFHS-5, 2019-21, urban households): few have a car, most have a two-wheeler
 CAR_OWNERS = 0.13
 SCOOTER_OWNERS = 0.6
+CYCLE_OWNERS = 0.4  # about four in ten town homes have a bicycle
 
 # work (PLFS 2023-24, urban, usual status)
 IN_WORK_FORCE = {  # share of each age band and sex in the labour force: (men, women)
@@ -66,6 +87,7 @@ PUPILS_PER_TEACHER = 30.0
 
 # health (NSS 75th round, urban): about 9% are ill in any fortnight and most see a doctor
 FALL_ILL_PER_DAY = 0.0055
+PRIVATE_VISITS = 0.74  # share of doctor visits (outside hospital stays) made to private doctors in towns
 ILL_AT_ANY_TIME = 0.04
 DOCTOR_VISITS_PER_DAY = 0.0042
 
@@ -73,6 +95,9 @@ DOCTOR_VISITS_PER_DAY = 0.0042
 # GST compensation and grants worth about a third of their income (RBI, municipal finances 2022)
 STATE_GRANT_PER_PERSON_YEAR = 750.0  # less here, as Kamalnagar also collects sales tax itself
 
+# the informal economy: street vendors are about 2% of a city's people (National Policy on Urban Street Vendors)
+VENDORS_PER_100 = 2.0
+
 HAPPINESS = 41.0  # out of 100: India's life evaluation of about 4.1 out of 10
 
-__all__ = [name for name in dir() if name.isupper()] + ["work_force_share"]
+__all__ = [name for name in dir() if name.isupper()] + ["work_force_share", "death_rate"]

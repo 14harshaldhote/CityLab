@@ -139,6 +139,14 @@ export default function App() {
         { label: "auto rides", color: "#e0a21b", values: daily.map((d) => d.trips_auto ?? 0) },
         { label: "car trips", color: "#d2463c", values: daily.map((d) => d.trips_car ?? 0) },
         { label: "scooter trips", color: "#8a4fc6", values: daily.map((d) => d.trips_scooter ?? 0) },
+        { label: "cycle trips", color: "#2a9d8f", values: daily.map((d) => d.trips_cycle ?? 0) },
+        { label: "shared auto rides", color: "#c9781e", values: daily.map((d) => d.trips_shared ?? 0) },
+      ],
+      informal: [
+        { label: "street vendors", color: "#2f9a52", values: daily.map((d) => d.vendors ?? 0) },
+        { label: "domestic workers", color: "#d9467f", values: daily.map((d) => d.maids ?? 0) },
+        { label: "waiting at the naka", color: "#8a8f98", values: daily.map((d) => d.at_naka ?? 0) },
+        { label: "picked for a day's work", color: "#e0a21b", values: daily.map((d) => d.naka_hired ?? 0) },
       ],
       town: [
         { label: "babies born", color: "#5f8a4a", values: daily.map((d) => d.town_births ?? 0) },
@@ -148,7 +156,8 @@ export default function App() {
       ],
       townHealth: [
         { label: "ill right now (hundreds)", color: "#d4413f", values: daily.map((d) => (d.town_sick ?? 0) / 100) },
-        { label: "doctor visits", color: "#2c7fb8", values: daily.map((d) => d.town_hospital_visits ?? 0) },
+        { label: "doctor visits", color: "#2c7fb8", values: daily.map((d) => d.town_doctor_visits ?? d.town_hospital_visits ?? 0) },
+        { label: "of them at the Civil Hospital", color: "#d4413f", values: daily.map((d) => d.town_hospital_visits ?? 0) },
       ],
       crime: [
         { label: "thefts", color: "#b3261e", values: daily.map((d) => d.crimes ?? 0) },
@@ -171,8 +180,10 @@ export default function App() {
       ],
       health: [
         { label: "ill", color: "#d4413f", values: daily.map((d) => d.sick ?? 0) },
-        { label: "doctor visits", color: "#2c7fb8", values: daily.map((d) => d.hospital_visits ?? 0) },
-        { label: "average wait (minutes)", color: "#8a8f98", values: daily.map((d) => d.hospital_wait ?? 0) },
+        { label: "Civil Hospital visits", color: "#d4413f", values: daily.map((d) => d.hospital_visits ?? 0) },
+        { label: "clinic visits", color: "#2c7fb8", values: daily.map((d) => d.clinic_visits ?? 0) },
+        { label: "hospital wait (minutes)", color: "#8a8f98", values: daily.map((d) => d.hospital_wait ?? 0) },
+        { label: "clinic wait (minutes)", color: "#b8a27a", values: daily.map((d) => d.clinic_wait ?? 0) },
       ],
       dodged: [{ label: "tax dodged per day", color: "#b3261e", values: daily.map((d) => d.tax_dodged ?? 0) }],
       budget: [
@@ -330,8 +341,16 @@ export default function App() {
                     </p>
                   )}
                   <p className="muted small">
-                    {life.hospital.sick} ill · {life.hospital.month.visits} doctor visits this month · {life.tax.cash_workers} paid cash in hand
+                    {life.hospital.sick} ill · {life.hospital.month.visits} doctor visits this month
+                    {life.hospital.month.private != null && ` (${life.hospital.month.private} at private clinics)`} · {life.tax.cash_workers} paid cash in hand
                   </p>
+                  {life.informal && (
+                    <p className="muted small">
+                      Informal work: {life.informal.vendors} street vendors, {life.informal.maids} domestic workers, {life.informal.labourers} day labourers (
+                      {Math.round(life.informal.share * 100)}% of workers, with cash-in-hand jobs) · about {Math.round(life.informal.naka.picked)} of{" "}
+                      {Math.round(life.informal.naka.waiting)} at the labour naka get work each morning
+                    </p>
+                  )}
                   {life.celebrities.length > 0 && (
                     <div className="people">
                       Best known:{" "}
@@ -447,6 +466,8 @@ export default function App() {
               <LineChart days={chart.days} series={chart.money} height={120} />
               <LineChart days={chart.days} series={chart.budget} height={130} />
               <LineChart days={chart.days} series={chart.dodged} height={110} />
+              <h2>Informal work</h2>
+              <LineChart days={chart.days} series={chart.informal} height={120} />
               <h2>Happiness and opinions</h2>
               <LineChart days={chart.days} series={chart.mood} height={130} />
               <LineChart days={chart.days} series={chart.views} height={150} />

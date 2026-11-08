@@ -50,6 +50,26 @@ function faithLine(card: PersonCard): string | null {
   return `Goes to ${place} ${how}.`;
 }
 
+const TRADES: Record<string, string> = { vendor: "a street vendor", maid: "a domestic worker", labourer: "a day labourer" };
+const WAYS: Record<string, string> = { walk: "walking", cycle: "cycling", bus: "the bus", shared: "shared autos", auto: "autos" };
+
+function Habits({ card }: { card: PersonCard }) {
+  const h = card.habits;
+  if (!h || !card.alive || (!h.favourites.length && !h.avoids.length && !Object.keys(h.ways).length)) return null;
+  const ways = Object.entries(h.ways).filter(([, v]) => Math.abs(v) >= 0.1);
+  return (
+    <>
+      <h3>Learned from experience</h3>
+      <p className="small">
+        {h.favourites.length > 0 && <>Favourite places: {h.favourites.map((f) => f.name.split(",")[0]).join(", ")}. </>}
+        {h.avoids.length > 0 && <>Avoids {h.avoids.map((f) => f.name.split(",")[0]).join(" and ")}. </>}
+        {ways.length > 0 && <>Getting about, likes {ways.map(([k, v]) => `${WAYS[k] ?? k} ${v > 0 ? "👍" : "👎"}`).join(", ")}.</>}
+      </p>
+      <p className="muted small">They've tried {h.tried} places. Each visit, good or bad, and friends' tips shape where they go next.</p>
+    </>
+  );
+}
+
 const TOPICS: [string, string][] = [
   ["taxes", "Taxes"],
   ["police", "The police"],
@@ -97,6 +117,7 @@ function InnerLife({ card }: { card: PersonCard }) {
         </div>
       </div>
       <p className="muted small">Feelings follow what happens to them and fade back to their nature. Opinions come from their own life, then from friends; the more independent they are, the less friends sway them.</p>
+      <Habits card={card} />
     </>
   );
 }
@@ -121,6 +142,8 @@ export default function PersonPanel({ card, net, onPick }: { card: PersonCard; n
       <p>
         {card.job
           ? `Works at ${card.job.place}, shift ${card.job.shift}, earns ${card.job.wage_per_day.toFixed(0)} a day.`
+          : card.trade
+            ? `Works as ${TRADES[card.trade] ?? card.trade}${card.trade === "maid" ? ` in ${card.clients ?? 0} homes` : card.trade_place ? ` at ${card.trade_place.split(",")[0]}` : ""}: no payslip, no pension.`
           : card.school
             ? `Pupil at ${card.school}.`
             : card.retired

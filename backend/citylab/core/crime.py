@@ -73,7 +73,7 @@ def temptation(p: Person, balance: float, debt: float, t: int) -> float:
     if age < 18 or age >= 70:
         return 0.0
     hard = 0.0
-    if p.job is None and not p.retired and not p.at_home and p.school is None:
+    if p.job is None and not p.trade and not p.retired and not p.at_home and p.school is None:
         hard += 0.45
     if debt > 0:
         hard += min(0.35, debt / 30_000.0)

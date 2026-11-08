@@ -69,6 +69,7 @@ def end_of_day(w: World) -> None:
     w.social.fade()
     w.visits = {}
     traffic = w.transport.close_day()
+    informal = w.informal.daily()  # vendors, maids and day labourers are paid in cash for today
     w.government.daily()  # departments and builders, before the books close (crews are paid with today's wages)
     money = w.economy.end_of_day()
     crime = w.crime.daily()
@@ -84,6 +85,7 @@ def end_of_day(w: World) -> None:
 
     alive = w.alive()
     _jobs(w, rng, alive)
+    w.informal.nightly(alive)
     _romance(w, rng, alive)
     _births(w, rng, alive)
     _leave_home(w, rng, alive)
@@ -95,6 +97,7 @@ def end_of_day(w: World) -> None:
     row.update(asdict(w.today))
     row.update({k: v for k, v in money.items() if k != "flows"})
     row.update(traffic)
+    row.update(informal)
     row.update(crime)
     row.update(health)
     row.update(nightly_happiness(w))
@@ -151,10 +154,11 @@ def _birthday(w: World, p: Person, t: int) -> None:
             p.at_home = False
             p.unemployed_since = t
     elif not p.retired and (age == rw.LAST_WORKING_AGE or age == rw.RETIREMENT_AGE and (
-            p.at_home or p.job is None or w.streams("life").random() >= rw.work_force_share(60, p.sex) * 1.6)):
+            p.at_home or p.job is None and not p.trade or w.streams("life").random() >= rw.work_force_share(60, p.sex) * 1.6)):
         p.retired = True
         p.at_home = False
         place = w.city.buildings[p.job.building].name if p.job else None
+        w.informal.drop(p)
         w.fire(p)
         p.unemployed_since = None
         w.emit("retired", f"{p.name} retired" + (f" from {place}." if place else "."), (p.id,))
@@ -168,6 +172,7 @@ def _die(w: World, p: Person) -> None:
     p.died = t
     age = int(p.age(t))
     w.fire(p)
+    w.informal.drop(p)
     w.unenrol(p)
     w.economy.close(p, "died")
     if p.partner is not None and p.partner in w.people:
@@ -192,9 +197,10 @@ def _jobs(w: World, rng: np.random.Generator, alive: list[Person]) -> None:
         return
     vac = w.vacancies()
     for p in seekers:
-        if p.unemployed_since is None:
+        if p.unemployed_since is None and not p.trade:
             p.unemployed_since = w.t
-        if not vac or rng.random() > 0.25:  # a job search takes a few days
+        # a job search takes a few days; someone with a trade keeps half an eye out for a proper job
+        if not vac or rng.random() > (0.02 if p.trade else 0.25):
             continue
         home = w.city.buildings[w.households[p.household].home]
         near = sorted(set(b for b, _ in vac), key=lambda b: (math.hypot(w.city.buildings[b].x - home.x, w.city.buildings[b].y - home.y), b))[:5]
@@ -244,6 +250,7 @@ def _move_in(w: World, rng: np.random.Generator, a: Person, b: Person) -> None:
         w.occupancy[src.home].remove(src.id)
     dst.has_car = dst.has_car or src.has_car
     dst.has_scooter = dst.has_scooter or src.has_scooter
+    dst.has_cycle = dst.has_cycle or src.has_cycle
     w.emit("moved", f"{mover.name} moved in with {stay.name} at {w.city.buildings[dst.home].name}.", (mover.id, stay.id), dst.home)
 
 
@@ -280,7 +287,8 @@ def _leave_home(w: World, rng: np.random.Generator, alive: list[Person]) -> None
         if home is None:
             return
         hh.members.remove(p.id)
-        new = w.new_household(home, has_car=bool(rng.random() < rw.CAR_OWNERS * 0.6), has_scooter=bool(rng.random() < rw.SCOOTER_OWNERS))
+        new = w.new_household(home, has_car=bool(rng.random() < rw.CAR_OWNERS * 0.6), has_scooter=bool(rng.random() < rw.SCOOTER_OWNERS),
+                              has_cycle=bool(w.streams("cycles").random() < rw.CYCLE_OWNERS))
         new.members.append(p.id)
         p.household = new.id
         w.emit("moved_out", f"{p.name} left the family home and moved to {w.city.buildings[home].name}.", (p.id,), home)
@@ -289,7 +297,8 @@ def _leave_home(w: World, rng: np.random.Generator, alive: list[Person]) -> None
 def _migration(w: World, rng: np.random.Generator) -> None:
     t = w.t
     alive = w.alive()
-    seekers = sum(1 for p in alive if p.job is None and not p.retired and not p.at_home and p.school is None and 18 <= p.age(t) < rw.LAST_WORKING_AGE)
+    seekers = sum(1 for p in alive if p.job is None and not p.trade and not p.retired and not p.at_home and p.school is None
+                  and 18 <= p.age(t) < rw.LAST_WORKING_AGE)
     open_jobs = len(w.vacancies())
     free_homes = sum(w.city.buildings[b].households - len(o) for b, o in w.occupancy.items())
     pull = max(0, open_jobs - seekers)
@@ -302,7 +311,8 @@ def _migration(w: World, rng: np.random.Generator) -> None:
         home = w.free_home(rng, near=near)
         if home is None:
             break
-        hh = w.new_household(home, has_car=bool(rng.random() < rw.CAR_OWNERS), has_scooter=bool(rng.random() < rw.SCOOTER_OWNERS))
+        hh = w.new_household(home, has_car=bool(rng.random() < rw.CAR_OWNERS), has_scooter=bool(rng.random() < rw.SCOOTER_OWNERS),
+                             has_cycle=bool(w.streams("cycles").random() < rw.CYCLE_OWNERS))
         last = None
         a = 22 + int(rng.integers(0, 22))
         faith = pick_religion(rng)
@@ -326,7 +336,9 @@ def _migration(w: World, rng: np.random.Generator) -> None:
                 w.enrol(m)
             elif m.age(t) >= 18:
                 if rng.random() < rw.work_force_share(m.age(t), m.sex):
-                    m.unemployed_since = t
+                    trade = w.informal.choose_trade(m)
+                    if trade is None or not w.informal.take_up(m, trade):
+                        m.unemployed_since = t
                 else:
                     m.at_home = True
         if anchor is not None:
@@ -345,6 +357,7 @@ def _migration(w: World, rng: np.random.Generator) -> None:
             leaving = list(hh.members)
             for q in leaving:
                 p = w.people[q]
+                w.informal.drop(p)
                 p.alive = False  # gone from the city (not dead): the registry keeps them
                 p.died = None
                 w.unenrol(p)

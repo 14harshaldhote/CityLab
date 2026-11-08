@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any
 from ..core import policy, reports
 from ..core.clock import MINUTES_PER_DAY, SimTime
 from ..core.mind import TOPIC_WORDS
+from ..core.informal import TRADE_WORDS
 from ..core.people import ACTIVITY_NAMES
 from . import figures, guard
 from .llm import LocalAI
@@ -440,6 +441,14 @@ class Asker:
             out += figures.story(w)
         if "council" in subj and "opinions" not in subj:
             out += figures.council(w)
+        if "informal" in subj and not q.people:
+            out += figures.informal(w)
+        if ("travel" in subj or "buses" in q.kinds and {"cycle", "cycles", "shared", "auto", "autos", "commute"} & words) and not q.people:
+            out += figures.travel(w)
+        if "clinics" in subj and not q.people:
+            out += figures.clinics(w)
+        if "habits" in subj and not q.people:
+            out += figures.habits(w)
         if "friends" in subj and 0 < len(q.people) <= 3:
             for pid in q.people:
                 if len(q.people) > 1:
@@ -472,7 +481,8 @@ class Asker:
     def _brief(w: Any, p: Any, now: int) -> str:
         district = w.city.buildings[w.households[p.household].home].district
         age = p.age(now)
-        doing = (f"works at {w.city.buildings[p.job.building].name}" if p.job is not None else "is retired" if p.retired
+        doing = (f"works at {w.city.buildings[p.job.building].name}" if p.job is not None
+                 else f"works as {TRADE_WORDS[p.trade]}" if p.trade else "is retired" if p.retired
                  else "is at school" if p.school is not None else "is a small child" if age < 6 else ("is at college" if age < 25 else "keeps house") if p.at_home
                  else "is looking for work" if age >= 18
                  else "is a child")
@@ -488,6 +498,10 @@ class Asker:
         s = [f"{p.name} is {int(p.age(now))} and lives at {card['home']['name']}."]
         if card["job"]:
             s.append(f"They work at {card['job']['place']}, earning ₹{card['job']['wage_per_day']:.0f} a day.")
+        elif card.get("trade"):
+            where = {"vendor": f", with a cart near {card['trade_place']}", "labourer": f", standing at the naka by {card['trade_place']}",
+                     "maid": f", working in {card['clients']} {'home' if card['clients'] == 1 else 'homes'}"}.get(card["trade"], "")
+            s.append(f"They work as {TRADE_WORDS[card['trade']]}{where}.")
         elif card["school"]:
             s.append(f"They go to {card['school']}.")
         elif card["retired"]:
@@ -522,6 +536,7 @@ class Asker:
         if mind["known_for"]:
             s.append(f"Around town they're known as someone who {mind['known_for']}." if not mind["known_for"].startswith("a ")
                      else f"Around town they're known as {mind['known_for']}.")
+        s += figures.person_habits(card["habits"])
         return " ".join(s)
 
     def _weather(self, q: Question, w: Any, now: int) -> list[str]:
@@ -665,7 +680,11 @@ class Asker:
         if facts:
             out = " ".join(facts)
         elif sources:
-            out = "I have no exact figure for that, only these diary entries that match your words closely."
+            # no figure to work out: the closest page of the diary is the answer
+            out = f"The closest record in the city's diary, from {sources[0]['when']}: {sources[0]['text']}"
+            if len(sources) > 1:
+                out += " Other records that match your words are below."
+            return out
         else:
             return ("I don't know: the city keeps no records on that. Try asking about its people (by name), births, jobs, thefts and the "
                     "police, traffic and buses, the hospital and its doctors, the budget and taxes, happiness and what people think, the "

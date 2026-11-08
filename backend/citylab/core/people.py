@@ -22,7 +22,7 @@ NEEDS = ("hunger", "energy", "social", "fun")
 # activity codes, shared with the frontend (index = colour/legend)
 SLEEP, HOME, EAT_HOME, EAT_OUT, WORK, SCHOOL, SOCIAL, PARK, SHOP, TRAVEL, WORSHIP, JAIL, HOSPITAL = range(13)
 ACTIVITY_NAMES = ("sleeping", "at home", "eating at home", "eating out", "working", "at school", "visiting friends", "at the park",
-                  "shopping", "travelling", "at a place of worship", "in jail", "at the hospital")
+                  "shopping", "travelling", "at a place of worship", "in jail", "seeing a doctor")
 
 # per-minute base drain, then per-activity additions (hunger, energy, social, fun)
 BASE_RATE = (-1 / 360, -1 / 1400, -1 / 1800, -1 / 800)
@@ -124,6 +124,16 @@ class Person:
     leanings: dict[str, float] = field(default_factory=dict)  # their own slant on each topic, whatever happens
     fame: float = 0.0
     known_for: str = ""
+    # what experience has taught them (see brain.py): how much they like each place they have tried,
+    # and each way of getting about, from -1 (never again) to +1 (their favourite)
+    likes: dict[int, float] = field(default_factory=dict)
+    ways: dict[str, float] = field(default_factory=dict)
+    # informal work with no workplace of its own (see informal.py): "vendor", "maid" or "labourer"
+    trade: str = ""
+    pitch: int | None = None  # where a vendor sets up, or the labour naka
+    clients: list[int] = field(default_factory=list)  # households a maid works for
+    worked_day: int = -1  # the last day they went out to their trade
+    last_mode: str = ""  # how they got here: walk, cycle, bus, shared, auto, scooter or car
 
     @property
     def name(self) -> str:
@@ -169,10 +179,24 @@ class Household:
     members: list[int]
     has_car: bool
     has_scooter: bool = False  # a scooter or motorbike: most town families have one
+    has_cycle: bool = False  # a bicycle
+    maid: int | None = None  # the domestic worker who comes in each morning, if they have one
 
 
 def _clamp(v: float) -> float:
     return 0.0 if v < 0.0 else 1.0 if v > 1.0 else v
+
+
+LEARN = 0.3  # how much one experience changes someone's mind about a place or a way of travelling
+KEEP = 16  # places remembered; the least strongly felt are forgotten first
+
+
+def learn(memory: dict, key: object, reward: float, rate: float = LEARN) -> None:
+    """Move what someone remembers about ``key`` towards how it just went (-1..1)."""
+    old = memory.get(key, 0.0)
+    memory[key] = round(old + rate * (max(-1.0, min(1.0, reward)) - old), 4)
+    if len(memory) > KEEP:
+        del memory[min(memory, key=lambda k: (abs(memory[k]), str(k)))]
 
 
 def urgency(v: float) -> float:
@@ -181,5 +205,8 @@ def urgency(v: float) -> float:
 
 
 def gompertz_annual(age: float, health: float = 1.0) -> float:
-    """Yearly chance of dying: doubles about every 7.7 years of age (Gompertz law)."""
-    return min(1.0, 0.00003 * math.exp(0.09 * age) * (1.0 + 1.5 * (1.0 - health)) + 0.0003)
+    """Yearly chance of dying: India's town life table by exact age (it rises about 9% a year of age in
+    later life, the Gompertz law), higher for people in poor health."""
+    from .realworld import death_rate
+
+    return min(1.0, death_rate(age) * (0.8 + 0.6 * (1.0 - health)))

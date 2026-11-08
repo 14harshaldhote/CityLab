@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, W
 from pydantic import BaseModel, Field
 
 from ..core import policy, reports
+from ..core.informal import informal_share
 from ..core.health import happiness_view
 from ..core.clock import SimTime
 from ..core.people import ACTIVITY_NAMES
@@ -105,8 +106,9 @@ def life(request: Request) -> dict[str, Any]:
         hosp = w.health.view()
         tax = w.economy.dodging()
         return {"happiness": happiness_view(w), "poll": w.mind.poll, "celebrities": w.mind.celebrities(5),
-                "hospital": {k: hosp[k] for k in ("sick", "by_illness", "month", "doctors") if k in hosp},
-                "tax": {k: tax[k] for k in ("taxpayers", "cash_workers", "cash_books") if k in tax}}
+                "hospital": {k: hosp[k] for k in ("sick", "by_illness", "month", "doctors", "places") if k in hosp},
+                "tax": {k: tax[k] for k in ("taxpayers", "cash_workers", "cash_books") if k in tax},
+                "informal": w.informal.view() | {"share": round(informal_share(w), 3)}}
 
 
 @router.get("/town")

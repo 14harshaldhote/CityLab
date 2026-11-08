@@ -2,7 +2,9 @@ import type { Transport } from "../api/types";
 
 const MODES: [key: string, label: string, color: string][] = [
   ["walk", "on foot", "#5f8a4a"],
+  ["cycle", "by cycle", "#2a9d8f"],
   ["bus", "by bus", "#2c7fb8"],
+  ["shared", "by shared auto", "#c9781e"],
   ["auto", "by auto", "#e0a21b"],
   ["scooter", "by scooter", "#8a4fc6"],
   ["car", "by car", "#d2463c"],
@@ -30,7 +32,13 @@ export default function RoadsPanel({ data }: { data: Transport }) {
             <b>{now.on_scooters ?? 0}</b> on scooters
           </li>
           <li>
+            <b>{now.cycling ?? 0}</b> cycling
+          </li>
+          <li>
             <b>{now.in_autos}</b> in autos
+          </li>
+          <li>
+            <b>{now.in_shared_autos ?? 0}</b> in shared autos
           </li>
           <li>
             <b>{now.on_buses}</b> on {now.buses} buses

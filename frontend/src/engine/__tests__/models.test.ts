@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Building, CityMap } from "../../api/types";
 import { buildingModel, cameraModel, outskirtsModel, plotModel, siteHeight, siteModel, streetModel, transitModel } from "../models";
 
-const kinds = ["home", "office", "shop", "restaurant", "factory", "school", "hospital", "police", "city_hall", "court", "bank", "park", "bus_depot",
+const kinds = ["home", "office", "shop", "restaurant", "factory", "school", "hospital", "clinic", "police", "city_hall", "court", "bank", "park", "bus_depot",
   "temple", "mosque", "church", "gurudwara", "vihara", "derasar", "agiary"];
 
 const lot = (id: number, kind: string, households = 0): Building => ({

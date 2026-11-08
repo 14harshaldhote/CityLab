@@ -48,6 +48,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from .clock import DAYS_PER_YEAR, MINUTES_PER_DAY
+from .informal import VEG_PER_PERSON
 
 if TYPE_CHECKING:
     from .people import Person
@@ -374,7 +375,9 @@ class Economy:
             shops = w._nearby(hh.home, "shop")
             payer = self._richest_adult(hh.members)
             if shops and payer is not None:
-                self.purchase(w.people[payer], shops[0].id, GROCERIES_PER_PERSON * len(hh.members), "groceries")
+                # vegetables and fruit came from a street vendor's cart today, if there was one nearby (see informal.py)
+                each = GROCERIES_PER_PERSON - (VEG_PER_PERSON if hh.id in w.informal.veg_homes else 0.0)
+                self.purchase(w.people[payer], shops[0].id, each * len(hh.members), "groceries")
 
     def _household_pays(self, members: list[int], dst: str, amount: float, purpose: str) -> None:
         """Adults share a bill in proportion to what they have; if they cannot, it overdraws the richest."""

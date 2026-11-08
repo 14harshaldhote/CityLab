@@ -36,8 +36,8 @@ def test_a_full_city_zones_land_lays_streets_and_builds_homes():
     sites = [b for b in w.city.buildings if b.status == "construction"]
     assert sites and all(b.kind == "home" for b in sites)
     assert w.city.version > version
-    # a site is a workplace: its crew jobs are on offer
-    assert any(bid == sites[0].id for bid, _ in w.vacancies())
+    # a site is a workplace: its crew is picked from the labour naka each morning
+    assert any(site == sites[0].id for _, site in w.informal.jobs_today())
     # and nobody can move in yet
     assert all(s.id not in w.occupancy for s in sites)
 

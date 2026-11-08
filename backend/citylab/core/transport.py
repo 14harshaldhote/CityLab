@@ -17,11 +17,21 @@ traffic as everyone else. A rider walks to a stop, waits for the next bus with r
 rides, and walks the rest of the way. Fares are 10 rupees (half for seniors, free for
 children under 12) and go to the city; the city pays for the diesel.
 
-**Choosing how to go.** Short trips are walked and people with a car drive. Everyone
-else weighs walking, the bus and an auto by time and money: minutes walking or
-waiting feel longer than minutes riding (much longer in the rain), and a fare costs
-more to someone who earns less. They pick with a little randomness, so a street
-always has a mix.
+**Shared autos.** Six-seater autos ply the main roads (the bus routes) without a
+timetable: wave one down, squeeze in, pay a flat ₹15 (₹25 for a long ride), and
+hop off where you like. Faster to catch than a bus, cheaper than a whole auto.
+
+**Cycles.** About four in ten town homes have a bicycle. A cycle is free and
+twice as quick as walking, and miserable in the rain.
+
+**Choosing how to go.** Short trips are walked and people with a car or a scooter
+ride it. Everyone else weighs walking, cycling, the bus, a shared auto and a
+whole auto by time and money: minutes walking or waiting feel longer than
+minutes riding (much longer in the rain), and a fare costs more to someone who
+earns less. And they remember: a long wait for a packed bus, a soaking on a
+cycle or being late for work again makes them think twice next time (``ways``),
+so each person grows their own travel habits. They pick with a little
+randomness, so a street always has a mix.
 """
 
 from __future__ import annotations
@@ -32,11 +42,11 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 import networkx as nx
-import numpy as np
 
 from .citygen import CENTRE, Building, _nearest_node
 from .clock import MINUTES_PER_DAY, SimTime
-from .routing import AUTO, BUS, CAR, SCOOTER, WAIT, WALK, WALK_M_PER_MIN, Trip, _access
+from .people import learn
+from .routing import AUTO, BUS, CAR, CYCLE, SCOOTER, SHARED, WAIT, WALK, WALK_M_PER_MIN, Trip, _access
 
 if TYPE_CHECKING:
     from .people import Person
@@ -48,11 +58,16 @@ CAPACITY = 3.5  # vehicles a street takes per slot before it slows (a small city
 WIDE = 1.8  # a widened street takes this much more
 UNDER_WORKS = 0.6  # and this much less while it is being widened
 ALPHA, BETA, MAX_SLOWDOWN = 0.6, 4, 6.0
-PCU = {"car": 1.0, "auto": 0.7, "bus": 1.0, "scooter": 0.4}  # how much room each vehicle takes
+PCU = {"car": 1.0, "auto": 0.7, "bus": 1.0, "scooter": 0.4, "cycle": 0.2, "shared": 0.2}  # room each vehicle takes (a shared auto's, per rider)
 BUS_PACE = 0.85  # buses are a bit slower than cars
 DWELL = 0.5  # minutes at each stop
 BUS_ROOM = 60
 AUTO_BASE, AUTO_PER_KM = 25.0, 13.0  # minimum fare covers the first 1.5 km
+SHARED_FARE, SHARED_LONG, SHARED_LONG_KM = 15.0, 25.0, 4.0  # a seat in a shared auto
+SHARED_SEATS = 6
+CYCLE_M_PER_MIN = 200.0  # 12 km/h
+CYCLE_MAX = 6000.0  # metres: further than this, people don't cycle
+WAYS = 6.0  # minutes a strongly felt habit is worth when choosing how to go
 PETROL_PER_KM = 7.0  # ₹105 a litre, 15 km a litre
 SCOOTER_PETROL_PER_KM = 2.5  # 45 km a litre
 DIESEL_PER_KM = 25.0  # per bus-kilometre: ₹90 a litre, 3.6 km a litre
@@ -127,7 +142,7 @@ class Run:
 
 @dataclass
 class Today:
-    trips: dict[str, int] = field(default_factory=lambda: {"walk": 0, "car": 0, "bus": 0, "auto": 0, "scooter": 0})
+    trips: dict[str, int] = field(default_factory=lambda: {"walk": 0, "cycle": 0, "car": 0, "bus": 0, "shared": 0, "auto": 0, "scooter": 0})
     commute_minutes: float = 0.0
     commutes: int = 0
     late: int = 0
@@ -386,6 +401,98 @@ class Transport:
                     run=(run, ka, kb), stop=self.stops[board_node].name)
         return trip, walked, wait, ride
 
+    def _shared(self, src: Building, dst: Building, t: int) -> tuple[Trip, float, float, float] | None:
+        """A shared auto along a main road: walk to it, wave one down, ride, walk the rest. (trip, walking, waiting, riding)"""
+        hour = (t % MINUTES_PER_DAY) // 60
+        if not 6 <= hour < 22:
+            return None  # they stop running at night
+        a = self._near_road(src)
+        b = self._near_road(dst)
+        best = None
+        for ri, (ka, da) in a.items():
+            hit = b.get(ri)
+            if hit is None or hit[0] <= ka:
+                continue
+            kb, db = hit
+            est = (da + db) / WALK_M_PER_MIN + (kb - ka) * 0.6
+            if best is None or est < best[0]:
+                best = (est, ri, ka, kb)
+        if best is None:
+            return None
+        _, ri, ka, kb = best
+        r = self.routes[ri]
+        w = self.w
+        walk1, _ = w.router._path(src.node, r.nodes[ka])
+        walk2, _ = w.router._path(r.nodes[kb], dst.node)
+        pts = [(src.x + src.w / 2, src.y + src.h / 2)] + [w.city.node_xy(n) for n in walk1]
+        times = [float(t)]
+        for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+            times.append(times[-1] + math.hypot(x1 - x0, y1 - y0) / WALK_M_PER_MIN)
+        legs = [WALK] * (len(pts) - 1)
+        rush = 7 <= hour < 10 or 17 <= hour < 20
+        wait = float(self.rng.exponential(3.0 if rush else 6.0)) + 0.5
+        at_stop = times[-1]
+        pts.append(pts[-1])
+        times.append(at_stop + wait)
+        legs.append(WAIT)
+        ride_nodes = r.nodes[ka:kb + 1]
+        node_times = self._drive(ride_nodes, at_stop + wait, "shared", record=False)
+        for k in range(1, len(ride_nodes)):
+            pts.append(r.xy[ka + k])
+            times.append(node_times[k] + 0.3 * k)  # stops to let people on and off
+            legs.append(SHARED)
+        ride = times[-1] - (at_stop + wait)
+        end = times[-1]
+        tail = [w.city.node_xy(n) for n in walk2[1:]] + [(dst.x + dst.w / 2, dst.y + dst.h / 2)]
+        for x1, y1 in tail:
+            x0, y0 = pts[-1]
+            pts.append((x1, y1))
+            times.append(times[-1] + math.hypot(x1 - x0, y1 - y0) / WALK_M_PER_MIN)
+            legs.append(WALK)
+        walked = (at_stop - t) + (times[-1] - end)
+        km = sum(math.dist(p, q) for p, q in zip(r.xy[ka:kb + 1], r.xy[ka + 1:kb + 1])) / 1000.0
+        trip = Trip(depart=t, arrive=max(t + 1, math.ceil(times[-1])), points=pts, times=times, legs=legs, mode="shared",
+                    line=r.number, stop=self.stops[r.nodes[ka]].name if r.nodes[ka] in self.stops else self.street_name(r.nodes[ka], r.nodes[ka + 1]),
+                    fare=SHARED_LONG if km > SHARED_LONG_KM else SHARED_FARE)
+        trip.run = ride_nodes
+        return trip, walked, wait, ride
+
+    def _near_road(self, b: Building) -> dict[int, tuple[int, float]]:
+        """For each route (one direction of a main road), the nearest corner on it within reach: route -> (node index, metres)."""
+        key = -1 - b.id
+        hit = self._near.get(key)
+        if hit is None:
+            cx, cy = b.x + b.w / 2, b.y + b.h / 2
+            best: dict[int, tuple[int, float]] = {}
+            for r in self.routes:
+                for k, (x, y) in enumerate(r.xy):
+                    d = abs(x - cx) + abs(y - cy)
+                    if d <= TO_STOP and (r.index not in best or d < best[r.index][1]):
+                        best[r.index] = (k, d)
+            self._near[key] = hit = best  # type: ignore[assignment]
+        return hit  # type: ignore[return-value]
+
+    def _cycle(self, pts: list[tuple[float, float]], nodes: tuple[int, ...], t: int, record: bool) -> Trip:
+        times = [float(t), t + 1.0]  # unlock it, wheel it out
+        for a, b in zip(pts, pts[1:]):
+            times.append(times[-1] + math.dist(a, b) / CYCLE_M_PER_MIN)
+        points = [pts[0]] + list(pts)
+        if record:
+            self._record(nodes, t + 1.0, "cycle", CYCLE_M_PER_MIN)
+        return Trip(depart=t, arrive=max(t + 1, math.ceil(times[-1])), points=points, times=times, legs=[CYCLE] * (len(points) - 1), mode="cycle")
+
+    def _record(self, nodes: tuple[int, ...] | list[int], t0: float, kind: str, speed: float) -> None:
+        """Count a slow vehicle on each street it uses (it takes a little room, and isn't slowed much by jams)."""
+        g = self.w.city.graph
+        t = t0
+        for a, b in zip(nodes, nodes[1:]):
+            e = (a, b) if a < b else (b, a)
+            s = int(t // SLOT)
+            slots = self.load[e]
+            slots[s] = slots.get(s, 0.0) + PCU[kind]
+            self.touched[s].add(e)
+            t += (g.edges[a, b]["length"] if g.has_edge(a, b) else 260.0) / speed
+
     def _catch(self, r: Route, ka: int, kb: int, at_stop: float, t: int) -> Run | None:
         """The first bus on this route that reaches the stop after the rider and has room."""
         day = int(at_stop // MINUTES_PER_DAY)
@@ -424,6 +531,7 @@ class Transport:
             self._pay(p, trip, dist)
         else:
             trip = self._choose(p, src, dst, pts, nodes, dist, t, age)
+        p.last_mode = trip.mode
         self.today.trips[trip.mode] += 1
         if purpose is not None:
             self.today.commute_minutes += trip.arrive - t
@@ -468,6 +576,12 @@ class Transport:
         walk_min = walk.arrive - t
         options: list[tuple[float, Trip]] = [(effort * walk_min + 0.04 * max(0.0, walk_min - 20) ** 2, walk)]
         payer = self._payer(p, age)
+        hh = w.households[p.household]
+        crowded = False
+        if hh.has_cycle and 10 <= age < 65 and dist <= CYCLE_MAX:
+            cyc = self._cycle(pts, nodes, t, record=False)
+            ride = cyc.arrive - t
+            options.append((0.9 * (2.4 if rain else 1.0) * (1.3 if age >= 50 else 1.0) * ride + 0.03 * max(0.0, ride - 25) ** 2, cyc))
         bus = self._bus(p, src, dst, t)
         if bus is not None:
             trip, walked, wait, ride = bus
@@ -475,28 +589,64 @@ class Transport:
             trip.fare = 0.0 if age < 12 else fare / 2 if age >= 65 else fare
             if trip.fare == 0 or payer is not None and econ.can_afford(payer, trip.fare):
                 options.append((effort * walked + 1.4 * wait + ride + trip.fare / vot, trip))
+        if age >= 12 and payer is not None:
+            shared = self._shared(src, dst, t)
+            if shared is not None and econ.can_afford(payer, shared[0].fare):
+                trip, walked, wait, ride = shared
+                options.append((0.8 * effort * walked + 1.3 * wait + 1.1 * ride + trip.fare / vot, trip))
         if age >= 16 and payer is not None:
             fare = round(AUTO_BASE + AUTO_PER_KM * max(0.0, dist / 1000.0 - 1.5), 0)
             if econ.can_afford(payer, fare + 500):
                 auto = self._vehicle(pts, nodes, t, "auto", record=False)
                 auto.fare = fare
                 options.append(((auto.arrive - t) + fare / vot, auto))
-        costs = np.array([c for c, _ in options])
-        weights = np.exp(-(costs - costs.min()) / 6.0)
-        pick = options[int(self.rng.choice(len(options), p=weights / weights.sum()))][1]
+        # habits: what this person has learned about each way of getting about
+        costs = [c - WAYS * p.ways.get(trip.mode, 0.0) for c, trip in options]
+        low = min(costs)
+        weights = [math.exp((low - c) / 6.0) for c in costs]
+        r = self.rng.random() * sum(weights)
+        k = 0
+        while k < len(weights) - 1 and r >= weights[k]:
+            r -= weights[k]
+            k += 1
+        pick = options[k][1]
         if pick.mode == "auto":
             fare = pick.fare
             pick = self._vehicle(pts, nodes, t, "auto", record=True)
             pick.fare = fare
+        elif pick.mode == "cycle":
+            pick = self._cycle(pts, nodes, t, record=True)
+        elif pick.mode == "shared":
+            ride_nodes = pick.run
+            pick.run = None
+            self._record(ride_nodes, pick.times[0], "shared", FREE_SPEED)  # type: ignore[arg-type]
         if pick.mode == "bus":
             run, k0, k1 = pick.run  # type: ignore[misc]
+            crowded = max(run.load[k0:k1]) >= 0.8 * BUS_ROOM
             for k in range(k0, k1):
                 run.load[k] += 1
             run.riders += 1
             self.riders_today[run.route.number] += 1
-        if pick.mode in ("bus", "auto"):
+        if pick.mode in ("bus", "auto", "shared"):
             self._pay(p, pick, dist)
+        self._experience(p, pick, rain, crowded, vot)
         return pick
+
+    def _experience(self, p: Person, trip: Trip, rain: bool, crowded: bool, vot: float) -> None:
+        """How the trip felt: it becomes part of how they choose next time."""
+        mins = trip.arrive - trip.depart
+        waited = sum(b - a for a, b, leg in zip(trip.times, trip.times[1:], trip.legs) if leg == WAIT)
+        if trip.mode == "walk":
+            how = 0.3 - (0.7 if rain else 0.0) - max(0.0, mins - 20) / 30.0
+        elif trip.mode == "cycle":
+            how = 0.45 - (0.8 if rain else 0.0) - max(0.0, mins - 25) / 30.0
+        elif trip.mode == "bus":
+            how = 0.35 - max(0.0, waited - 6) / 15.0 - (0.5 if crowded else 0.0)
+        elif trip.mode == "shared":
+            how = 0.35 - max(0.0, waited - 4) / 10.0 - 0.15  # cramped, six to a seat for four
+        else:  # an auto
+            how = 0.4 - trip.fare / (vot * 60.0)
+        learn(p.ways, trip.mode, how + float(self.rng.normal(0.0, 0.2)), 0.15)
 
     def _payer(self, p: Person, age: float) -> Person | None:
         if age >= 18:
@@ -515,7 +665,7 @@ class Transport:
             econ.transfer(acct, "outside", (PETROL_PER_KM if trip.mode == "car" else SCOOTER_PETROL_PER_KM) * dist / 1000.0, "petrol")
         elif trip.mode == "bus" and trip.fare > 0:
             self.today.fares += econ.transfer(acct, "city", trip.fare, "bus fares")
-        elif trip.mode == "auto":
+        elif trip.mode in ("auto", "shared"):
             econ.transfer(acct, "outside", trip.fare, "auto fares")
 
     # ---- reports ------------------------------------------------------------------------
@@ -575,7 +725,8 @@ class Transport:
         riders = sum(self.riders_today.values())
         row = {
             "trips_walk": today.trips["walk"], "trips_car": today.trips["car"], "trips_bus": today.trips["bus"],
-            "trips_auto": today.trips["auto"], "trips_scooter": today.trips["scooter"], "commute_min": round(today.commute_minutes / max(1, today.commutes), 1),
+            "trips_auto": today.trips["auto"], "trips_scooter": today.trips["scooter"], "trips_cycle": today.trips["cycle"],
+            "trips_shared": today.trips["shared"], "commute_min": round(today.commute_minutes / max(1, today.commutes), 1),
             "late": today.late, "bus_riders": riders, "bus_fares": round(today.fares, 2),
         }
         worst = self.jams(limit=1, peak=self.peak)
@@ -652,6 +803,14 @@ class Transport:
             return "Walking to the bus stop" if t < trip.times[next(i for i, l in enumerate(trip.legs) if l == WAIT)] else "Walking from the bus stop"
         if trip.mode == "auto":
             return "Hailing an auto-rickshaw" if leg == WAIT else "Riding in an auto-rickshaw"
+        if trip.mode == "shared":
+            if leg == WAIT:
+                return f"Waving down a shared auto at {trip.stop}"
+            if leg == SHARED:
+                return "Squeezed into a shared auto"
+            return "Walking to the main road" if t < trip.times[next(i for i, l in enumerate(trip.legs) if l == WAIT)] else "Walking from the main road"
+        if trip.mode == "cycle":
+            return "Cycling"
         if trip.mode == "car":
             return "Driving"
         if trip.mode == "scooter":
@@ -680,14 +839,15 @@ class Transport:
         g = w.city.graph
         return {
             "now": {"walking": moving[WALK], "driving": moving[CAR], "on_buses": moving[BUS], "in_autos": moving[AUTO],
-                    "on_scooters": moving[SCOOTER],
+                    "on_scooters": moving[SCOOTER], "cycling": moving[CYCLE], "in_shared_autos": moving[SHARED],
                     "waiting": moving[WAIT], "buses": len(active)},
             "jams": self.jams(),
             "lines": lines,
             "today": {"trips": dict(self.today.trips), "commute_min": round(self.today.commute_minutes / max(1, self.today.commutes), 1),
                       "late": self.today.late, "fares": round(self.today.fares, 2), "bus_km": round(self.today.bus_km, 1)},
             "history": self.history[-14:],
-            "fares": {"bus": self.w.policy.bus_fare, "auto_min": AUTO_BASE, "auto_per_km": AUTO_PER_KM, "petrol_per_km": PETROL_PER_KM},
+            "fares": {"bus": self.w.policy.bus_fare, "auto_min": AUTO_BASE, "auto_per_km": AUTO_PER_KM, "petrol_per_km": PETROL_PER_KM,
+                      "shared": SHARED_FARE},
             "widened": [self.street_place(a, b) for a, b in sorted(g.edges()) if g.edges[a, b].get("lanes", 1) > 1],
         }
 

@@ -88,6 +88,17 @@ SUBJECTS: dict[str, tuple[str, ...]] = {
     "whatif": ("what if", "would happen", "what happens if", "suppose", "imagine if", "if we raise", "if we cut", "if income tax",
                "if the tax", "if bus fare", "if the bus fare"),
     "friends": ("friend", "friends", "friendship", "friendships", "best friend"),
+    "informal": ("informal", "street vendor", "street vendors", "vendor", "vendors", "hawker", "hawkers", "cart", "carts", "sabzi",
+                 "vegetable seller", "vegetable sellers", "maid", "maids", "domestic worker", "domestic workers", "domestic help",
+                 "kaamwali", "labourer", "labourers", "laborer", "laborers", "daily wage", "daily wages", "day labour", "day labor",
+                 "naka", "labour naka", "self-employed", "self employed", "trade", "trades", "gig"),
+    "travel": ("cycle", "cycles", "cycling", "cyclist", "cyclists", "bicycle", "bicycles", "shared auto", "shared autos", "share auto",
+               "auto rickshaw", "autos", "rickshaw", "rickshaws", "scooter", "scooters", "get around", "getting around", "get to work",
+               "commute", "commuting", "how do people travel", "travel", "travelling", "transport", "mode", "modes"),
+    "habits": ("favourite", "favourites", "favorite", "favorites", "habit", "habits", "regular", "regulars", "usual", "prefer",
+               "prefers", "preference", "preferences", "learn", "learns", "learned", "learnt", "learning", "experience", "word of mouth",
+               "recommend", "recommends", "recommendation", "tips", "self growing", "self-growing", "grow", "grows"),
+    "clinics": ("clinic", "clinics", "private doctor", "private doctors", "private clinic", "private clinics", "go private", "private"),
 }
 
 # groups of people a question can single out ("what do unemployed people think", "how happy are doctors")
@@ -101,6 +112,7 @@ GROUPS: dict[str, tuple[str, ...]] = {
     "teachers": ("teachers", "teacher"),
     "poor": ("poor", "poorest", "poor people", "low income"),
     "rich": ("rich people", "richest people", "wealthy people", "the rich"),
+    "informal": ("vendors", "street vendors", "maids", "domestic workers", "labourers", "laborers", "day labourers", "informal workers"),
 }
 # "who is the angriest person": the feeling a superlative asks about
 EXTREMES: dict[str, tuple[str, ...]] = {

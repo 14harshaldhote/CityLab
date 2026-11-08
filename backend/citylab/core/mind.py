@@ -16,7 +16,18 @@ check-up at the hospital, a theft on their street, being late because the bus
 was slow, paying tax while a friend is paid cash in hand. Then friends talk, and
 views spread along friendships. How much someone is swayed is their own: open,
 less agreeable people think more independently; agreeable people go along more.
-So two neighbours who lived through the same month can see it very differently.
+People also listen most to friends who already half agree with them and shrug
+off views far from their own (what psychologists call confirmation bias), so a
+town keeps its sceptics and its fans instead of melting into one opinion, and
+circles of friends who think alike form by themselves. Over weeks, what keeps
+happening to someone slowly becomes part of who they are: someone who keeps
+finding the buses worse than their neighbours do becomes a bus sceptic (their
+``leanings`` drift towards how their views differ from the town's). So two
+neighbours who lived through the same month can see it very differently.
+
+**Tips.** Friends also swap tips: a clinic that treated them well, a mess with
+good food, a park to avoid. A tip counts for more with trusting, agreeable
+people, and nothing beats trying a place yourself (see ``brain.py``).
 
 **Reputation.** People become known for something: having more friends than
 almost anyone, being among the richest, running a city department, being the
@@ -35,6 +46,7 @@ import numpy as np
 
 from .clock import MINUTES_PER_DAY
 from .health import CHECKUP
+from .people import learn
 
 if TYPE_CHECKING:
     from .events import Event
@@ -43,6 +55,7 @@ if TYPE_CHECKING:
 
 FEELINGS = ("joy", "sadness", "anger", "fear")
 TOPICS = ("taxes", "police", "hospital", "buses", "jobs", "council")
+OPEN_MIND = 0.7  # how far apart two views can be before the other one starts to sound wrong
 TOPIC_WORDS = {"taxes": "taxes", "police": "the police", "hospital": "the hospital", "buses": "the buses", "jobs": "finding work",
                "council": "the city council"}
 
@@ -108,7 +121,10 @@ class Mind:
         w = self.w
         if e.kind == "treated":
             p = w.people.get(e.people[0]) if e.people else None
-            if p is not None:
+            if p is not None and e.data.get("private"):  # a private clinic: it's the clinic they judge (in their likes), not the city
+                sat = float(e.data.get("satisfaction", 0.5))
+                self._nudge(p, {"joy": 0.1 if sat > 0.6 else 0.0, "anger": 0.15 if sat < 0.4 else 0.0}, {})
+            elif p is not None:
                 sat = float(e.data.get("satisfaction", 0.5))
                 self._nudge(p, {"joy": 0.1 if sat > 0.6 else 0.0, "anger": 0.25 if sat < 0.4 else 0.0}, {"hospital": (sat - 0.5) * 0.9})
             return
@@ -227,8 +243,11 @@ class Mind:
                 thefts[w.city.buildings[c.building].district] += 1
         tr = w.transport.history[-1] if w.transport.history else {}
         commute = float(tr.get("commute_min") or 15.0)
+        town = {k: float(np.mean([p.opinions.get(k, 0.0) for p in adults])) if adults else 0.0 for k in TOPICS}
         homes_full = 1 - sum(w.city.buildings[b].households - len(o) for b, o in w.occupancy.items()) / max(
             1, sum(w.city.buildings[b].households for b in w.occupancy))
+        # a few empty homes is normal; the council gets the blame as the last ones fill up
+        crowded = 0.4 * min(1.0, max(0.0, (homes_full - 0.97) / 0.03))
         for p in adults:
             o = p.opinions
             if not p.leanings:  # everyone starts with their own slant: an optimist, a sceptic, a grumbler about buses
@@ -243,36 +262,72 @@ class Mind:
             services = (o.get("hospital", 0.0) + o.get("buses", 0.0) + o.get("police", 0.0)) / 3
             if p.job is not None and not p.cash_job:
                 # an honest taxpayer: the rate, what they get back, and whether friends dodge it
-                target = 0.25 - 3.0 * (rate - 0.1) + 0.4 * services - 0.15 * cash_friends
+                target = 0.1 - 3.0 * (rate - 0.1) + 0.4 * services - 0.15 * cash_friends
             elif p.cash_job:
-                target = 0.4 - 2.0 * (rate - 0.1)
+                target = 0.25 - 2.0 * (rate - 0.1)
             else:
-                target = 0.1 - 1.0 * (rate - 0.1) + 0.3 * services
-            target_police = 0.35 - 0.12 * thefts.get(district, 0) - (0.3 if p.record else 0.0)
-            target_buses = 0.4 - (commute - 12.0) / 15.0 - (w.policy.bus_fare - 10.0) / 40.0 if not (w.households[p.household].has_car or w.households[p.household].has_scooter) else 0.1
+                target = -0.05 - 1.0 * (rate - 0.1) + 0.3 * services
+            target_police = 0.0 - 0.12 * thefts.get(district, 0) - (0.3 if p.record else 0.0)
+            target_buses = 0.12 - (commute - 12.0) / 15.0 - (w.policy.bus_fare - 10.0) / 40.0 if not (w.households[p.household].has_car or w.households[p.household].has_scooter) else -0.1
             looking = p.job is None and p.unemployed_since is not None and not p.retired
-            target_jobs = -0.5 if looking else 0.3
-            target_council = 0.2 * (o.get("jobs", 0.0) + o.get("taxes", 0.0) + services) - (0.4 if homes_full > 0.95 else 0.0)
-            for k, target in (("taxes", target), ("police", target_police), ("buses", target_buses), ("jobs", target_jobs),
+            if looking:
+                target_jobs = -0.5
+            elif p.job is not None:  # a job, but is it a good one? Low pay and long hours on a cart are work too
+                target_jobs = -0.3 + 0.5 * min(1.0, p.job.wage / 900.0)
+            elif p.trade:
+                target_jobs = -0.15
+            else:
+                target_jobs = 0.1
+            target_council = -0.05 + 0.2 * (o.get("jobs", 0.0) + o.get("taxes", 0.0) + services) - crowded
+            for k, target in (("taxes", target - 0.1), ("police", target_police), ("buses", target_buses), ("jobs", target_jobs),
                               ("council", target_council)):
                 target += lean[k]
                 o[k] = float(np.clip(o.get(k, 0.0) + 0.08 * (target - o.get(k, 0.0)), -1.0, 1.0))
             # the hospital is judged on visits (see react); between visits views drift back to their own slant
-            o["hospital"] = float(np.clip(o.get("hospital", 0.1) + 0.02 * (0.1 + lean["hospital"] - o.get("hospital", 0.1)), -1.0, 1.0))
+            o["hospital"] = float(np.clip(o.get("hospital", 0.0) + 0.02 * (lean["hospital"] - o.get("hospital", 0.0)), -1.0, 1.0))
+            # what keeps happening slowly becomes who they are: someone who keeps finding the buses worse than
+            # their neighbours do becomes a bus sceptic (measured against the town, so the town as a whole doesn't drift)
+            for k in TOPICS:
+                lean[k] = float(np.clip(lean[k] + 0.005 * (o[k] - town[k] - lean[k]), -0.8, 0.8))
 
     def _talk(self, adults: list[Person]) -> None:
-        """Friends compare notes; each person decides how much to take on."""
+        """Friends compare notes; each person decides how much to take on, and passes on a tip or two."""
         w = self.w
         snapshot = {p.id: dict(p.opinions) for p in adults}
+        tips = {p.id: self._best_tip(p) for p in adults}
         for p in adults:
             friends = [(q, s) for q, s in w.social.top_friends(p.id, 6) if q in snapshot]
             if not friends:
                 continue
-            pull = 0.12 * (1.0 - independence(p))
+            ind = independence(p)
+            pull = 0.15 * (1.0 - ind)
             total = sum(s for _, s in friends)
             for k in TOPICS:
-                avg = sum(snapshot[q].get(k, 0.0) * s for q, s in friends) / total
-                p.opinions[k] = p.opinions.get(k, 0.0) + pull * (avg - p.opinions.get(k, 0.0))
+                mine = p.opinions.get(k, 0.0)
+                shift = 0.0
+                for q, s in friends:
+                    gap = snapshot[q].get(k, 0.0) - mine
+                    shift += s * gap / (1.0 + (gap / OPEN_MIND) ** 2)  # a view far from your own is easier to wave away
+                p.opinions[k] = mine + pull * shift / total
+            # a tip from the closest friend who has one
+            for q, s in friends:
+                tip = tips.get(q)
+                if tip is None:
+                    continue
+                place, like = tip
+                if place in p.likes and abs(p.likes[place]) > 0.3:
+                    break  # they've been themselves and know what they think
+                learn(p.likes, place, like, 0.25 * s * (1.0 - 0.6 * ind))
+                break
+
+    @staticmethod
+    def _best_tip(p: Person) -> tuple[int, float] | None:
+        """The place they feel most strongly about, good or bad, if they feel strongly at all."""
+        if not p.likes:
+            return None
+        place = max(p.likes, key=lambda k: (abs(p.likes[k]), k))
+        like = p.likes[place]
+        return (place, like) if abs(like) >= 0.35 else None
 
     def _reputation(self) -> None:
         w = self.w

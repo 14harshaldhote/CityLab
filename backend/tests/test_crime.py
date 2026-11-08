@@ -1,6 +1,7 @@
 import copy
 import math
 
+from citylab.core import realworld as rw
 from citylab.core.clock import MINUTES_PER_DAY
 from citylab.core.crime import CAMERA_RANGE, Case, temptation
 from citylab.core.people import JAIL
@@ -114,3 +115,10 @@ def test_police_put_a_camera_where_thefts_keep_happening():
     cr._plan_cameras()
     assert len(cr.cameras) == 6 and w.city.version > version
     assert math.dist(w.city.node_xy(cr.cameras[-1]), (x, y)) <= CAMERA_RANGE * 1.2
+
+
+def test_a_quiet_month_on_the_map_still_leaves_the_town_reporting_thefts():
+    w = World(seed=4, population=300)
+    rows = [{"crimes": 0, "crimes_reported": 0, "population": 300}] * 30  # not one theft on the map all month
+    assert w.town._share(rows, "crimes_reported", "crimes", rw.REPORTED, 365) == rw.REPORTED
+    assert w.town._rate(rows, "crimes", "population", 1e-5, 365) > 0

@@ -73,8 +73,9 @@ def test_death_is_recorded_and_tidied(fresh_world):
 def test_couples_form_from_close_friends_and_move_in(fresh_world):
     w = fresh_world
     singles = [p for p in w.alive() if p.partner is None and 25 <= p.age(0) < 40]
-    a = singles[0]
-    b = next(q for q in singles[1:] if q.sex != a.sex and abs(q.age(0) - a.age(0)) < 10 and q.household != a.household)
+    size = lambda p: len(w.households[p.household].members)  # noqa: E731
+    a, b = next((a, b) for a in singles for b in singles if b.sex != a.sex and abs(b.age(0) - a.age(0)) < 10
+                and b.household != a.household and size(a) + size(b) <= 7)  # a home with room for them both
     w.social.tie(a.id, b.id, "friend", 0.9)
     lifecycle._romance(w, Always(), [a])
     assert a.partner == b.id and b.partner == a.id
