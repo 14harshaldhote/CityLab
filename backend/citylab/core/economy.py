@@ -226,10 +226,17 @@ class Economy:
     def audit(self, rng: np.random.Generator) -> list[dict[str, Any]]:
         """The Tax Office's weekly round: check a few businesses' books."""
         w = self.w
-        firms = [b for b in w.city.buildings if b.jobs and b.kind not in PUBLIC and b.kind not in OWN_PAYER and b.kind not in TRUSTS]
+        # only businesses actually trading: a shop with nobody behind the counter has no books to check
+        firms = [b for b in w.city.buildings if b.jobs and b.kind not in PUBLIC and b.kind not in OWN_PAYER and b.kind not in TRUSTS
+                 and (w.job_holders.get(b.id) or b.status == "construction")]
         if not firms:
             return []
-        weights = np.array([3.0 if b.kind in RETAIL or b.status == "construction" else 1.0 for b in firms])
+        # risk-based, as real tax offices pick cases: cash trades first, and more so where the takings look thin
+        # for the staff on the floor (a business keeping cash off its books, or paying people cash in hand)
+        def red_flag(b: Any) -> bool:
+            return self.company(b.id) in self.cash_books or any(w.people[q].cash_job for q in w.job_holders.get(b.id, []))
+
+        weights = np.array([(3.0 if b.kind in RETAIL or b.status == "construction" else 1.0) * (3.0 if red_flag(b) else 1.0) for b in firms])
         picks = rng.choice(len(firms), size=min(AUDITS_PER_WEEK, len(firms)), replace=False, p=weights / weights.sum())
         out = []
         for i in sorted(int(k) for k in picks):

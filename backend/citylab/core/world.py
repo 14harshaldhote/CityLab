@@ -198,9 +198,12 @@ class World:
         b = self.city.buildings[building]
         slot = len(self.job_holders[building])
         shift = b.jobs[slot % len(b.jobs)]
-        if b.kind == "clinic" and not any(self.people[q].skill >= DOCTOR_SKILL for q in self.job_holders[building]):
-            # a clinic is a doctor's practice: whoever takes it on first is the qualified doctor
-            p.skill = max(p.skill, DOCTOR_SKILL + 0.08 + 0.1 * (stable_hash("doctor", p.id) % 100) / 100)
+        if b.kind in ("hospital", "clinic"):
+            # one qualified doctor for each shift; everyone else is a nurse, an orderly or a compounder
+            if not any(self.people[q].skill >= DOCTOR_SKILL and self.people[q].job.shift == shift for q in self.job_holders[building]):
+                p.skill = max(p.skill, DOCTOR_SKILL + 0.08 + 0.1 * (stable_hash("doctor", p.id) % 100) / 100)
+            else:
+                p.skill = min(p.skill, DOCTOR_SKILL - 0.01)
         wage = (SITE_WAGE if b.status == "construction" else b.type.wage) * (0.8 + 0.6 * p.skill)
         if p.trade:  # a proper job: the cart, the homes or the naka can wait
             self.informal.drop(p)
@@ -353,6 +356,7 @@ class World:
         vac_order = [vac[i] for i in rng.permutation(len(vac))]
         # the hospital and the police station are staffed first, as any real town's are
         vac_order.sort(key=lambda v: self.city.buildings[v[0]].kind not in ("hospital", "police", "clinic"))
+        force = traders = 0
         for p in self.alive():
             age = p.age(0)
             p.skill = float(np.clip(rng.normal(0.25 + min(age, 45) / 90.0, 0.12), 0.05, 0.95))
@@ -369,10 +373,13 @@ class World:
             elif rng.random() >= share:
                 p.at_home = True  # studying, keeping house or caring for family: not looking for paid work
                 continue
+            force += 1
             trade = self.informal.choose_trade(p) if age < RETIREMENT_AGE + 5 else None
             if trade is not None and self.informal.take_up(p, trade):
+                traders += 1
                 continue  # a cart, a round of homes, or the labour naka
-            if rng.random() < 1.0 - UNEMPLOYMENT and vac_order:
+            # the jobless share is of everyone working or looking, traders included
+            if rng.random() >= UNEMPLOYMENT * force / max(1, force - traders) and vac_order:
                 home = self.city.buildings[self.households[p.household].home]
                 # take one of the nearer open jobs, as people tend to
                 sample = vac_order[: 25]
@@ -381,6 +388,22 @@ class World:
                 vac_order.remove(pick)
                 self.hire(p, pick[0])
             elif age >= 18:
+                p.unemployed_since = 0
+        # businesses start with the staff they found: posts nobody filled on day one were never advertised,
+        # so the town opens with real unemployment instead of hiring it away in its first week
+        for b, _ in vac_order:
+            if self.city.buildings[b].kind not in ("hospital", "police", "clinic") and self.job_holders[b]:
+                self.city.buildings[b].jobs = self.city.buildings[b].jobs[: len(self.job_holders[b])]
+        # and if chance left too few looking for work, a few firms took on fewer people than they had room for
+        short = int(round(UNEMPLOYMENT * force)) - sum(1 for p in self.alive() if p.unemployed_since is not None)
+        staff = [p for p in self.alive() if p.job is not None and self.city.buildings[p.job.building].kind in ("office", "shop", "restaurant", "factory")]
+        if short > 0 and staff:
+            for i in sorted(rng.choice(len(staff), size=min(short, len(staff)), replace=False)):
+                p = staff[int(i)]
+                if len(self.job_holders[p.job.building]) < 2:
+                    continue  # never the last one left at a firm
+                self.city.buildings[p.job.building].jobs.remove(p.job.shift)
+                self.fire(p)
                 p.unemployed_since = 0
 
         # a starting web of acquaintances: coworkers, classmates and neighbours
