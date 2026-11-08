@@ -120,6 +120,11 @@ completely free and runs on your own computer.
     their own limits: some fume at a 40-minute queue, others shrug it off.
     Click a name to see their temperament and what's on their mind, or ask
     "Why are people unhappy?".
+24. **Read the signboards.** The hospital, the police station, every temple,
+    mosque and church, the schools and parks carry name tags you can read from
+    anywhere. Zoom in and the shops, offices and restaurants appear, then the
+    housing societies. Tags never pile on top of each other, and *Names*
+    hides them all when you just want to look.
 
 ![Kamalnagar at night](docs/images/city-night.png)
 

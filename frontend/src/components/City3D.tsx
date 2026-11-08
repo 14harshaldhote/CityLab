@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { CityMap as City, Frame } from "../api/types";
 import { daylight, hash01 } from "../engine/art";
+import { BuildingLabels, LANDMARK, type Spot } from "../engine/labels";
 import { buildingModel, cameraModel, outskirtsModel, plotModel, siteHeight, streetModel, transitModel, type Part, type Shape, type Win } from "../engine/models";
 import { skyAt } from "../engine/sky";
 import { lerpFrames } from "../engine/view";
@@ -94,6 +95,9 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
   const [traffic, setTraffic] = useState(true);
   const showTraffic = useRef(traffic);
   showTraffic.current = traffic;
+  const [names, setNames] = useState(true);
+  const showNames = useRef(names);
+  showNames.current = names;
   const saved = useRef<{ pos: THREE.Vector3; target: THREE.Vector3 } | null>(null); // keep the view when the city grows
 
   useEffect(() => {
@@ -688,7 +692,40 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
       }
     });
 
+    // ---- name tags: landmarks from anywhere, shops and offices up close, homes closer still ----
+    const labels = new BuildingLabels(el);
+    const anchor = city.buildings.map((b) => new THREE.Vector3(b.x + b.w / 2, siteHeight(b) + 8, b.y + b.h / 2));
+    const onScreen = new THREE.Vector3();
+    let W = el.clientWidth;
+    let H = el.clientHeight;
+    let labelsWere = "";
+    const nameTags = () => {
+      if (!showNames.current) {
+        if (labelsWere !== "off") labels.hide();
+        labelsWere = "off";
+        return;
+      }
+      const picked = sel.current.building;
+      const key = `${camera.matrixWorld.elements.map((v) => v.toFixed(2)).join()}|${W}x${H}|${picked}|${city.buildings.length}|${Math.floor(performance.now() / 1000)}`;
+      if (key === labelsWere) return; // nothing has moved: the tags are already right
+      labelsWere = key;
+      const spots: Spot[] = [];
+      city.buildings.forEach((b, i) => {
+        const far = camera.position.distanceTo(anchor[i]);
+        const land = LANDMARK[b.kind];
+        const reach = land ? Infinity : b.kind === "home" ? 650 : 1100;
+        if (far > reach && b.id !== picked) return;
+        onScreen.copy(anchor[i]).project(camera);
+        if (onScreen.z > 1) return; // behind the camera
+        const rank = (b.id === picked ? 1000 : land ? land * 10 : b.kind === "home" ? 0 : 20) + 10 * (1 - Math.min(1, far / 6000));
+        spots.push({ b, x: ((onScreen.x + 1) / 2) * W, y: ((1 - onScreen.y) / 2) * H, rank });
+      });
+      labels.place(spots, W, H, picked);
+    };
+
     const resize = new ResizeObserver(() => {
+      W = el.clientWidth;
+      H = el.clientHeight;
       renderer.setSize(el.clientWidth, el.clientHeight);
       camera.aspect = el.clientWidth / Math.max(1, el.clientHeight);
       camera.updateProjectionMatrix();
@@ -699,6 +736,7 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
       update();
       controls.update();
       renderer.render(scene, camera);
+      nameTags();
     });
     api.current = {
       reset: () => {
@@ -719,6 +757,7 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
       saved.current = { pos: camera.position.clone(), target: controls.target.clone() };
       renderer.setAnimationLoop(null);
       resize.disconnect();
+      labels.destroy();
       controls.dispose();
       renderer.domElement.remove();
       scene.traverse((o) => {
@@ -737,6 +776,9 @@ export default function City3D({ city, frames, selectedPerson, selectedBuilding,
       )}
       <div className="view-tools">
         <button onClick={() => api.current?.reset()}>Whole city</button>
+        <button className={names ? "on" : ""} onClick={() => setNames(!names)} title="Show the names of buildings">
+          Names
+        </button>
         <button className={traffic ? "on" : ""} onClick={() => setTraffic(!traffic)} title="Busy streets turn amber, jammed ones red">
           Traffic
         </button>

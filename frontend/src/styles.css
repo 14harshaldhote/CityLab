@@ -161,6 +161,7 @@ main {
   background: #e9e1c8;
   cursor: grab;
   touch-action: none;
+  position: relative;
 }
 
 .map.loading {
@@ -1274,3 +1275,77 @@ button.cite {
   font-size: 11px;
   color: var(--muted);
 }
+
+/* ---- building name tags over the map and the 3D city ---- */
+.b-labels {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 2;
+}
+.b-label {
+  --c: #8a7a68;
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px 2px 6px;
+  border-radius: 9px 10px 9px 11px;
+  background: rgba(255, 251, 240, 0.9);
+  border: 1.5px solid var(--c);
+  box-shadow: 0 2px 4px rgba(60, 40, 20, 0.18);
+  color: #3d3228;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 14px;
+  white-space: nowrap;
+  will-change: transform;
+}
+.b-label::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--c);
+  flex: none;
+}
+.b-label::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  width: 6px;
+  height: 6px;
+  margin-left: -3px;
+  background: rgba(255, 251, 240, 0.9);
+  border-right: 1.5px solid var(--c);
+  border-bottom: 1.5px solid var(--c);
+  transform: rotate(45deg);
+}
+.b-label.land {
+  font-size: 11.5px;
+  font-weight: 700;
+}
+.b-label.picked {
+  background: #d9480f;
+  border-color: #d9480f;
+  color: #fffaf0;
+}
+.b-label.picked::before {
+  background: #fffaf0;
+}
+.b-label.picked::after {
+  background: #d9480f;
+}
+.b-label.g-care { --c: #d2463c; }
+.b-label.g-safety { --c: #3f63a5; }
+.b-label.g-civic { --c: #7b5ea7; }
+.b-label.g-school { --c: #d99a1e; }
+.b-label.g-park { --c: #4f9a4a; }
+.b-label.g-faith { --c: #e07b2a; }
+.b-label.g-trade { --c: #c9663b; }
+.b-label.g-work { --c: #6f7d8c; }
+.b-label.g-home { --c: #a08466; font-weight: 500; }

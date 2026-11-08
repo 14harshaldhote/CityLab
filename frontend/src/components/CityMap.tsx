@@ -5,6 +5,7 @@ import {
   LIFT, PALETTE, PEOPLE, ROOF, WORSHIP_KINDS, buildingHeight, daylight, hash01, shade, shadowPolygon, skyTint, styleKind, windowGrid, wobblyRect,
   type Pt,
 } from "../engine/art";
+import { BuildingLabels, LANDMARK, type Spot } from "../engine/labels";
 import { lerpFrames, nearestPoint, rectAt } from "../engine/view";
 
 interface Props {
@@ -281,6 +282,28 @@ export default function CityMap({ city, frames, selectedPerson, selectedBuilding
       }
     };
 
+    // ---- name tags: landmarks always, shops and offices once zoomed in, homes closer still ----
+    const labels = new BuildingLabels(el);
+    let labelsWere = "";
+    const nameTags = () => {
+      const s = world.scale.x;
+      const picked = sel.current.building;
+      const W = el.clientWidth;
+      const H = el.clientHeight;
+      const key = `${s.toFixed(4)}|${world.x.toFixed(1)}|${world.y.toFixed(1)}|${W}x${H}|${picked}|${heights.size}|${Math.floor(performance.now() / 1000)}`;
+      if (key === labelsWere) return;
+      labelsWere = key;
+      const spots: Spot[] = [];
+      for (const b of city.buildings) {
+        const land = LANDMARK[b.kind];
+        const zoom = land ? 0 : b.kind === "home" ? 0.75 : 0.4;
+        if (s < zoom && b.id !== picked) continue;
+        const rank = b.id === picked ? 1000 : land ? land * 10 : b.kind === "home" ? 0 : 20;
+        spots.push({ b, x: world.x + (b.x + b.w / 2) * s, y: world.y + (b.y - lift(b.id)) * s - 4, rank });
+      }
+      labels.place(spots, W, H, picked);
+    };
+
     (async () => {
       await app.init({ resizeTo: el, background: PALETTE.paper, antialias: true, autoDensity: true, resolution: window.devicePixelRatio || 1 });
       if (disposed) {
@@ -296,6 +319,7 @@ export default function CityMap({ city, frames, selectedPerson, selectedBuilding
       app.stage.addChild(grain);
       fit();
       app.ticker.add(draw);
+      app.ticker.add(nameTags);
       app.canvas.addEventListener("pointerdown", onDown);
       window.addEventListener("pointermove", onMove);
       window.addEventListener("pointerup", onUp);
@@ -305,6 +329,7 @@ export default function CityMap({ city, frames, selectedPerson, selectedBuilding
 
     return () => {
       disposed = true;
+      labels.destroy();
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       if (ready) app.destroy(true, { children: true });
